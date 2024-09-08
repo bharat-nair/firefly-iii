@@ -167,6 +167,7 @@ return [
         'de_DE' => ['name_locale' => 'Deutsch', 'name_english' => 'German'],
         'el_GR' => ['name_locale' => 'Ελληνικά', 'name_english' => 'Greek'],
         'en_GB' => ['name_locale' => 'English (GB)', 'name_english' => 'English (GB)'],
+        'en_IN' => ['name_locale' => 'English (IN)', 'name_english' => 'English (IN)'],
         'en_US' => ['name_locale' => 'English (US)', 'name_english' => 'English (US)'],
         'es_ES' => ['name_locale' => 'Español', 'name_english' => 'Spanish'],
         'ca_ES' => ['name_locale' => 'Català (Espanya)', 'name_english' => 'Catalan (Spain)'],
