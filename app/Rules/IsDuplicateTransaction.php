@@ -1,4 +1,5 @@
 <?php
+
 /*
  * IsDuplicateTransaction.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
@@ -32,15 +34,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class IsDuplicateTransaction implements ValidationRule
 {
-    private string $value;
-
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $this->value = $value;
-
-        $fail($this->value);
+        $fail($value);
     }
 }

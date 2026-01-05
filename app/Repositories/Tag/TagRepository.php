@@ -24,24 +24,29 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Tag;
 
 use Carbon\Carbon;
+use Exception;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Factory\TagFactory;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Location;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\Tag;
-use FireflyIII\Models\TransactionType;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Facades\Steam;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Override;
 
 /**
  * Class TagRepository.
  */
-class TagRepository implements TagRepositoryInterface
+class TagRepository implements TagRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     public function count(): int
     {
@@ -49,11 +54,11 @@ class TagRepository implements TagRepositoryInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function destroy(Tag $tag): bool
     {
-        \DB::table('tag_transaction_journal')->where('tag_id', $tag->id)->delete();
+        DB::table('tag_transaction_journal')->where('tag_id', $tag->id)->delete();
         $tag->transactionJournals()->sync([]);
         $tag->delete();
 
@@ -70,7 +75,7 @@ class TagRepository implements TagRepositoryInterface
 
         /** @var Tag $tag */
         foreach ($tags as $tag) {
-            \DB::table('tag_transaction_journal')->where('tag_id', $tag->id)->delete();
+            DB::table('tag_transaction_journal')->where('tag_id', $tag->id)->delete();
             $tag->delete();
         }
     }
@@ -86,44 +91,35 @@ class TagRepository implements TagRepositoryInterface
         $collector = app(GroupCollectorInterface::class);
 
         $collector->setUser($this->user);
-        $collector->setRange($start, $end)->setTypes([TransactionType::WITHDRAWAL])->setTag($tag);
+        $collector->setRange($start, $end)->setTypes([TransactionTypeEnum::WITHDRAWAL->value])->setTag($tag);
 
         return $collector->getExtractedJournals();
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     public function find(int $tagId): ?Tag
     {
+        /** @var null|Tag */
         return $this->user->tags()->find($tagId);
     }
 
     public function findByTag(string $tag): ?Tag
     {
-        // @var Tag|null
+        /** @var null|Tag */
         return $this->user->tags()->where('tag', $tag)->first();
     }
 
     public function firstUseDate(Tag $tag): ?Carbon
     {
-        // @var Carbon|null
         return $tag->transactionJournals()->orderBy('date', 'ASC')->first()?->date;
     }
 
     public function getAttachments(Tag $tag): Collection
     {
         $set  = $tag->attachments()->get();
-
-        /** @var \Storage $disk */
-        $disk = \Storage::disk('upload');
+        $disk = Storage::disk('upload');
 
         return $set->each(
-            static function (Attachment $attachment) use ($disk): void {
+            static function (Attachment $attachment) use ($disk): void { // @phpstan-ignore-line
                 /** @var null|Note $note */
                 $note                    = $attachment->notes()->first();
                 // only used in v1 view of tags
@@ -140,13 +136,14 @@ class TagRepository implements TagRepositoryInterface
 
         // add date range (or not):
         if (null === $year) {
-            app('log')->debug('Get tags without a date.');
+            Log::debug('Get tags without a date.');
             $tagQuery->whereNull('tags.date');
         }
 
         if (null !== $year) {
-            app('log')->debug(sprintf('Get tags with year %s.', $year));
-            $tagQuery->where('tags.date', '>=', $year.'-01-01 00:00:00')->where('tags.date', '<=', $year.'-12-31 23:59:59');
+            $year = min(2038, max(1970, $year));
+            Log::debug(sprintf('Get tags with year %s.', $year));
+            $tagQuery->where('tags.date', '>=', sprintf('%d-01-01 00:00:00', $year))->where('tags.date', '<=', sprintf('%d-12-31 23:59:59', $year));
         }
         $collection = $tagQuery->get();
         $return     = [];
@@ -172,14 +169,13 @@ class TagRepository implements TagRepositoryInterface
         $collector = app(GroupCollectorInterface::class);
 
         $collector->setUser($this->user);
-        $collector->setRange($start, $end)->setTypes([TransactionType::DEPOSIT])->setTag($tag);
+        $collector->setRange($start, $end)->setTypes([TransactionTypeEnum::DEPOSIT->value])->setTag($tag);
 
         return $collector->getExtractedJournals();
     }
 
     public function lastUseDate(Tag $tag): ?Carbon
     {
-        // @var Carbon|null
         return $tag->transactionJournals()->orderBy('date', 'DESC')->first()?->date;
     }
 
@@ -188,13 +184,13 @@ class TagRepository implements TagRepositoryInterface
      */
     public function newestTag(): ?Tag
     {
-        // @var Tag|null
+        /** @var null|Tag */
         return $this->user->tags()->whereNotNull('date')->orderBy('date', 'DESC')->first();
     }
 
     public function oldestTag(): ?Tag
     {
-        // @var Tag|null
+        /** @var null|Tag */
         return $this->user->tags()->whereNotNull('date')->orderBy('date', 'ASC')->first();
     }
 
@@ -205,7 +201,7 @@ class TagRepository implements TagRepositoryInterface
     {
         $search = sprintf('%%%s%%', $query);
 
-        return $this->user->tags()->where('tag', 'LIKE', $search)->get(['tags.*']);
+        return $this->user->tags()->whereLike('tag', $search)->get(['tags.*']);
     }
 
     /**
@@ -213,14 +209,13 @@ class TagRepository implements TagRepositoryInterface
      */
     public function searchTags(string $query, int $limit): Collection
     {
-        /** @var Collection $tags */
         $tags = $this->user->tags()->orderBy('tag', 'ASC');
         if ('' !== $query) {
             $search = sprintf('%%%s%%', $query);
-            $tags->where('tag', 'LIKE', $search);
+            $tags->whereLike('tag', $search);
         }
 
-        return $tags->take($limit)->get('tags.*');
+        return $tags->take($limit)->get(['tags.*']);
     }
 
     public function store(array $data): Tag
@@ -237,7 +232,7 @@ class TagRepository implements TagRepositoryInterface
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
 
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             $collector->setRange($start, $end);
         }
 
@@ -259,46 +254,46 @@ class TagRepository implements TagRepositoryInterface
             if (false === $found) {
                 continue;
             }
-            $currencyId               = (int)$journal['currency_id'];
+            $currencyId               = (int) $journal['currency_id'];
             $sums[$currencyId] ??= [
-                'currency_id'                    => $currencyId,
-                'currency_name'                  => $journal['currency_name'],
-                'currency_symbol'                => $journal['currency_symbol'],
-                'currency_decimal_places'        => $journal['currency_decimal_places'],
-                TransactionType::WITHDRAWAL      => '0',
-                TransactionType::DEPOSIT         => '0',
-                TransactionType::TRANSFER        => '0',
-                TransactionType::RECONCILIATION  => '0',
-                TransactionType::OPENING_BALANCE => '0',
+                'currency_id'                               => $currencyId,
+                'currency_name'                             => $journal['currency_name'],
+                'currency_symbol'                           => $journal['currency_symbol'],
+                'currency_decimal_places'                   => $journal['currency_decimal_places'],
+                TransactionTypeEnum::WITHDRAWAL->value      => '0',
+                TransactionTypeEnum::DEPOSIT->value         => '0',
+                TransactionTypeEnum::TRANSFER->value        => '0',
+                TransactionTypeEnum::RECONCILIATION->value  => '0',
+                TransactionTypeEnum::OPENING_BALANCE->value => '0',
             ];
 
             // add amount to correct type:
-            $amount                   = app('steam')->positive((string)$journal['amount']);
+            $amount                   = Steam::positive((string) $journal['amount']);
             $type                     = $journal['transaction_type_type'];
-            if (TransactionType::WITHDRAWAL === $type) {
+            if (TransactionTypeEnum::WITHDRAWAL->value === $type) {
                 $amount = bcmul($amount, '-1');
             }
-            $sums[$currencyId][$type] = bcadd($sums[$currencyId][$type], $amount);
+            $sums[$currencyId][$type] = bcadd((string) $sums[$currencyId][$type], $amount);
 
             $foreignCurrencyId        = $journal['foreign_currency_id'];
             if (null !== $foreignCurrencyId && 0 !== $foreignCurrencyId) {
                 $sums[$foreignCurrencyId] ??= [
-                    'currency_id'                    => $foreignCurrencyId,
-                    'currency_name'                  => $journal['foreign_currency_name'],
-                    'currency_symbol'                => $journal['foreign_currency_symbol'],
-                    'currency_decimal_places'        => $journal['foreign_currency_decimal_places'],
-                    TransactionType::WITHDRAWAL      => '0',
-                    TransactionType::DEPOSIT         => '0',
-                    TransactionType::TRANSFER        => '0',
-                    TransactionType::RECONCILIATION  => '0',
-                    TransactionType::OPENING_BALANCE => '0',
+                    'currency_id'                               => $foreignCurrencyId,
+                    'currency_name'                             => $journal['foreign_currency_name'],
+                    'currency_symbol'                           => $journal['foreign_currency_symbol'],
+                    'currency_decimal_places'                   => $journal['foreign_currency_decimal_places'],
+                    TransactionTypeEnum::WITHDRAWAL->value      => '0',
+                    TransactionTypeEnum::DEPOSIT->value         => '0',
+                    TransactionTypeEnum::TRANSFER->value        => '0',
+                    TransactionTypeEnum::RECONCILIATION->value  => '0',
+                    TransactionTypeEnum::OPENING_BALANCE->value => '0',
                 ];
                 // add foreign amount to correct type:
-                $amount                          = app('steam')->positive((string)$journal['foreign_amount']);
-                if (TransactionType::WITHDRAWAL === $type) {
+                $amount                          = Steam::positive((string) $journal['foreign_amount']);
+                if (TransactionTypeEnum::WITHDRAWAL->value === $type) {
                     $amount = bcmul($amount, '-1');
                 }
-                $sums[$foreignCurrencyId][$type] = bcadd($sums[$foreignCurrencyId][$type], $amount);
+                $sums[$foreignCurrencyId][$type] = bcadd((string) $sums[$foreignCurrencyId][$type], $amount);
             }
         }
 
@@ -309,14 +304,14 @@ class TagRepository implements TagRepositoryInterface
     {
         $search = sprintf('%%%s', $query);
 
-        return $this->user->tags()->where('tag', 'LIKE', $search)->get(['tags.*']);
+        return $this->user->tags()->whereLike('tag', $search)->get(['tags.*']);
     }
 
     public function tagStartsWith(string $query): Collection
     {
         $search = sprintf('%s%%', $query);
 
-        return $this->user->tags()->where('tag', 'LIKE', $search)->get(['tags.*']);
+        return $this->user->tags()->whereLike('tag', $search)->get(['tags.*']);
     }
 
     public function transferredInPeriod(Tag $tag, Carbon $start, Carbon $end): array
@@ -324,7 +319,7 @@ class TagRepository implements TagRepositoryInterface
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         $collector->setUser($this->user);
-        $collector->setRange($start, $end)->setTypes([TransactionType::TRANSFER])->setTag($tag);
+        $collector->setRange($start, $end)->setTypes([TransactionTypeEnum::TRANSFER->value])->setTag($tag);
 
         return $collector->getExtractedJournals();
     }
@@ -360,7 +355,7 @@ class TagRepository implements TagRepositoryInterface
             // otherwise, update or create.
             if (!(null === $data['latitude'] && null === $data['longitude'] && null === $data['zoom_level'])) {
                 $location             = $this->getLocation($tag);
-                if (null === $location) {
+                if (!$location instanceof Location) {
                     $location = new Location();
                     $location->locatable()->associate($tag);
                 }
@@ -380,7 +375,47 @@ class TagRepository implements TagRepositoryInterface
 
     public function getLocation(Tag $tag): ?Location
     {
-        // @var Location|null
+        /** @var null|Location */
         return $tag->locations()->first();
+    }
+
+    #[Override]
+    public function periodCollection(Tag $tag, Carbon $start, Carbon $end): array
+    {
+        Log::debug(sprintf('periodCollection(#%d, %s, %s)', $tag->id, $start->format('Y-m-d'), $end->format('Y-m-d')));
+
+        return $tag->transactionJournals()
+            ->leftJoin('transactions', 'transactions.transaction_journal_id', '=', 'transaction_journals.id')
+            ->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id')
+            ->leftJoin('transaction_currencies', 'transaction_currencies.id', '=', 'transactions.transaction_currency_id')
+            ->leftJoin('transaction_currencies as foreign_currencies', 'foreign_currencies.id', '=', 'transactions.foreign_currency_id')
+            ->where('transaction_journals.date', '>=', $start)
+            ->where('transaction_journals.date', '<=', $end)
+            ->where('transactions.amount', '>', 0)
+            ->get([
+                // currencies
+                'transaction_currencies.id as currency_id',
+                'transaction_currencies.code as currency_code',
+                'transaction_currencies.name as currency_name',
+                'transaction_currencies.symbol as currency_symbol',
+                'transaction_currencies.decimal_places as currency_decimal_places',
+
+                // foreign
+                'foreign_currencies.id as foreign_currency_id',
+                'foreign_currencies.code as foreign_currency_code',
+                'foreign_currencies.name as foreign_currency_name',
+                'foreign_currencies.symbol as foreign_currency_symbol',
+                'foreign_currencies.decimal_places as foreign_currency_decimal_places',
+
+                // fields
+                'transaction_journals.date',
+                'transaction_types.type',
+                'transaction_journals.transaction_currency_id',
+                'transactions.amount',
+                'transactions.native_amount as pc_amount',
+                'transactions.foreign_amount',
+            ])
+            ->toArray()
+        ;
     }
 }

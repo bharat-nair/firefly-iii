@@ -1,4 +1,5 @@
 <?php
+
 /**
  * PreferenceTransformer.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -36,11 +37,11 @@ class WebhookAttemptTransformer extends AbstractTransformer
     public function transform(WebhookAttempt $attempt): array
     {
         return [
-            'id'                 => (string)$attempt->id,
+            'id'                 => (string) $attempt->id,
             'created_at'         => $attempt->created_at->toAtomString(),
             'updated_at'         => $attempt->updated_at->toAtomString(),
-            'webhook_message_id' => (string)$attempt->webhook_message_id,
-            'status_code'        => (int)$attempt->status_code,
+            'webhook_message_id' => (string) $attempt->webhook_message_id,
+            'status_code'        => (int) $attempt->status_code,
             'logs'               => $attempt->logs,
             'response'           => $attempt->response,
         ];

@@ -23,7 +23,10 @@ declare(strict_types=1);
 
 namespace FireflyIII\Handlers\Observer;
 
+use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Tag;
+use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class TagObserver
@@ -32,10 +35,14 @@ class TagObserver
 {
     public function deleting(Tag $tag): void
     {
-        app('log')->debug('Observe "deleting" of a tag.');
+        Log::debug('Observe "deleting" of a tag.');
 
+        $repository = app(AttachmentRepositoryInterface::class);
+        $repository->setUser($tag->user);
+
+        /** @var Attachment $attachment */
         foreach ($tag->attachments()->get() as $attachment) {
-            $attachment->delete();
+            $repository->destroy($attachment);
         }
 
         $tag->locations()->delete();

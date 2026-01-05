@@ -1,4 +1,5 @@
 <?php
+
 /*
  * TriggerController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -28,6 +29,7 @@ use FireflyIII\Api\V1\Requests\Models\Rule\TestRequest;
 use FireflyIII\Api\V1\Requests\Models\Rule\TriggerRequest;
 use FireflyIII\Models\Rule;
 use FireflyIII\Repositories\Rule\RuleRepositoryInterface;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\TransactionRules\Engine\RuleEngineInterface;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
@@ -73,7 +75,7 @@ class TriggerController extends Controller
 
         /** @var RuleEngineInterface $ruleEngine */
         $ruleEngine   = app(RuleEngineInterface::class);
-        $ruleEngine->setRules(new Collection([$rule]));
+        $ruleEngine->setRules(new Collection()->push($rule));
 
         // overrule the rule(s) if necessary.
         if (array_key_exists('start', $parameters) && null !== $parameters['start']) {
@@ -92,6 +94,11 @@ class TriggerController extends Controller
         // file the rule(s)
         $transactions = $ruleEngine->find();
         $count        = $transactions->count();
+
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($rule->user);
+        $transactions = $enrichment->enrich($transactions);
 
         $paginator    = new LengthAwarePaginator($transactions, $count, 31337, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.rules.test', [$rule->id]).$this->buildParams());
@@ -122,7 +129,7 @@ class TriggerController extends Controller
 
         /** @var RuleEngineInterface $ruleEngine */
         $ruleEngine = app(RuleEngineInterface::class);
-        $ruleEngine->setRules(new Collection([$rule]));
+        $ruleEngine->setRules(new Collection()->push($rule));
 
         // overrule the rule(s) if necessary.
         if (array_key_exists('start', $parameters) && null !== $parameters['start']) {

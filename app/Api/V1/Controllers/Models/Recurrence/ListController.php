@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ListController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -24,11 +25,11 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\Recurrence;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Recurrence;
 use FireflyIII\Repositories\Recurring\RecurringRepositoryInterface;
 use FireflyIII\Support\Http\Api\TransactionFilter;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
@@ -66,8 +67,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/recurrences/listTransactionByRecurrence
      *
      * Show transactions for this recurrence.
-     *
-     * @throws FireflyException
      */
     public function transactions(Request $request, Recurrence $recurrence): JsonResponse
     {
@@ -109,7 +108,11 @@ class ListController extends Controller
 
         $paginator    = $collector->getPaginatedGroups();
         $paginator->setPath(route('api.v1.transactions.index').$this->buildParams());
-        $transactions = $paginator->getCollection();
+
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $transactions = $enrichment->enrich($paginator->getCollection());
 
         /** @var TransactionGroupTransformer $transformer */
         $transformer  = app(TransactionGroupTransformer::class);

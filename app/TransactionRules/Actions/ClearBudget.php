@@ -23,25 +23,22 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionJournal;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class ClearBudget.
  */
 class ClearBudget implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -49,17 +46,17 @@ class ClearBudget implements ActionInterface
         $object = TransactionJournal::where('user_id', $journal['user_id'])->find($journal['transaction_journal_id']);
         $budget = $object->budgets()->first();
         if (null === $budget) {
-            app('log')->debug(sprintf('RuleAction ClearBudget, no budget in journal #%d.', $journal['transaction_journal_id']));
+            Log::debug(sprintf('RuleAction ClearBudget, no budget in journal #%d.', $journal['transaction_journal_id']));
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.journal_already_no_budget')));
 
             return false;
         }
 
-        \DB::table('budget_transaction_journal')->where('transaction_journal_id', '=', $journal['transaction_journal_id'])->delete();
+        DB::table('budget_transaction_journal')->where('transaction_journal_id', '=', $journal['transaction_journal_id'])->delete();
 
         event(new TriggeredAuditLog($this->action->rule, $object, 'clear_budget', $budget->name, null));
 
-        app('log')->debug(sprintf('RuleAction ClearBudget removed all budgets from journal #%d.', $journal['transaction_journal_id']));
+        Log::debug(sprintf('RuleAction ClearBudget removed all budgets from journal #%d.', $journal['transaction_journal_id']));
 
         return true;
     }

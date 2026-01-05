@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
@@ -33,6 +34,7 @@ use FireflyIII\Support\Http\Controllers\AugumentData;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Class DoubleController
@@ -90,9 +92,9 @@ class DoubleController extends Controller
                     'currency_decimal_places' => $currency['currency_decimal_places'],
                 ];
                 ++$result[$key]['transactions'];
-                $result[$key]['sum']       = bcadd($journal['amount'], $result[$key]['sum']);
-                $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string)$result[$key]['transactions']);
-                $result[$key]['avg_float'] = (float)$result[$key]['avg'];
+                $result[$key]['sum']       = bcadd((string) $journal['amount'], $result[$key]['sum']);
+                $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string) $result[$key]['transactions']);
+                $result[$key]['avg_float'] = (float) $result[$key]['avg'];
             }
         }
         // sort by amount_float
@@ -101,9 +103,9 @@ class DoubleController extends Controller
         array_multisort($amounts, SORT_ASC, $result);
 
         try {
-            $result = view('reports.double.partials.avg-expenses', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.double.partials.avg-expenses', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($e->getMessage(), 0, $e);
@@ -140,9 +142,9 @@ class DoubleController extends Controller
                     'currency_decimal_places'  => $currency['currency_decimal_places'],
                 ];
                 ++$result[$key]['transactions'];
-                $result[$key]['sum']       = bcadd($journal['amount'], $result[$key]['sum']);
-                $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string)$result[$key]['transactions']);
-                $result[$key]['avg_float'] = (float)$result[$key]['avg'];
+                $result[$key]['sum']       = bcadd((string) $journal['amount'], $result[$key]['sum']);
+                $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string) $result[$key]['transactions']);
+                $result[$key]['avg_float'] = (float) $result[$key]['avg'];
             }
         }
         // sort by amount_float
@@ -151,9 +153,9 @@ class DoubleController extends Controller
         array_multisort($amounts, SORT_DESC, $result);
 
         try {
-            $result = view('reports.double.partials.avg-income', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.double.partials.avg-income', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($e->getMessage(), 0, $e);
@@ -165,9 +167,9 @@ class DoubleController extends Controller
     /**
      * @return Factory|View
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    public function operations(Collection $accounts, Collection $double, Carbon $start, Carbon $end)
+    public function operations(Collection $accounts, Collection $double, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $withCounterpart = $this->accountRepository->expandWithDoubles($double);
         $together        = $accounts->merge($withCounterpart);
@@ -219,10 +221,10 @@ class DoubleController extends Controller
                 $report[$objectName]['dest_iban'] = $destIban;
 
                 // add amounts:
-                $report[$objectName]['spent']     = bcadd($report[$objectName]['spent'], $journal['amount']);
-                $report[$objectName]['sum']       = bcadd($report[$objectName]['sum'], $journal['amount']);
-                $sums[$currencyId]['spent']       = bcadd($sums[$currencyId]['spent'], $journal['amount']);
-                $sums[$currencyId]['sum']         = bcadd($sums[$currencyId]['sum'], $journal['amount']);
+                $report[$objectName]['spent']     = bcadd($report[$objectName]['spent'], (string) $journal['amount']);
+                $report[$objectName]['sum']       = bcadd($report[$objectName]['sum'], (string) $journal['amount']);
+                $sums[$currencyId]['spent']       = bcadd($sums[$currencyId]['spent'], (string) $journal['amount']);
+                $sums[$currencyId]['sum']         = bcadd($sums[$currencyId]['sum'], (string) $journal['amount']);
             }
         }
 
@@ -268,14 +270,14 @@ class DoubleController extends Controller
                 $report[$objectName]['source_iban'] = $sourceIban;
 
                 // add amounts:
-                $report[$objectName]['earned']      = bcadd($report[$objectName]['earned'], $journal['amount']);
-                $report[$objectName]['sum']         = bcadd($report[$objectName]['sum'], $journal['amount']);
-                $sums[$currencyId]['earned']        = bcadd($sums[$currencyId]['earned'], $journal['amount']);
-                $sums[$currencyId]['sum']           = bcadd($sums[$currencyId]['sum'], $journal['amount']);
+                $report[$objectName]['earned']      = bcadd($report[$objectName]['earned'], (string) $journal['amount']);
+                $report[$objectName]['sum']         = bcadd($report[$objectName]['sum'], (string) $journal['amount']);
+                $sums[$currencyId]['earned']        = bcadd($sums[$currencyId]['earned'], (string) $journal['amount']);
+                $sums[$currencyId]['sum']           = bcadd($sums[$currencyId]['sum'], (string) $journal['amount']);
             }
         }
 
-        return view('reports.double.partials.accounts', compact('sums', 'report'));
+        return view('reports.double.partials.accounts', ['sums' => $sums, 'report' => $report]);
     }
 
     /**
@@ -299,7 +301,7 @@ class DoubleController extends Controller
     /**
      * @return Factory|View
      */
-    public function operationsPerAsset(Collection $accounts, Collection $double, Carbon $start, Carbon $end)
+    public function operationsPerAsset(Collection $accounts, Collection $double, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $withCounterpart = $this->accountRepository->expandWithDoubles($double);
         $together        = $accounts->merge($withCounterpart);
@@ -342,10 +344,10 @@ class DoubleController extends Controller
                 ];
                 // set name
                 // add amounts:
-                $report[$objectName]['spent'] = bcadd($report[$objectName]['spent'], $journal['amount']);
-                $report[$objectName]['sum']   = bcadd($report[$objectName]['sum'], $journal['amount']);
-                $sums[$currencyId]['spent']   = bcadd($sums[$currencyId]['spent'], $journal['amount']);
-                $sums[$currencyId]['sum']     = bcadd($sums[$currencyId]['sum'], $journal['amount']);
+                $report[$objectName]['spent'] = bcadd($report[$objectName]['spent'], (string) $journal['amount']);
+                $report[$objectName]['sum']   = bcadd($report[$objectName]['sum'], (string) $journal['amount']);
+                $sums[$currencyId]['spent']   = bcadd($sums[$currencyId]['spent'], (string) $journal['amount']);
+                $sums[$currencyId]['sum']     = bcadd($sums[$currencyId]['sum'], (string) $journal['amount']);
             }
         }
 
@@ -381,14 +383,14 @@ class DoubleController extends Controller
                 ];
 
                 // add amounts:
-                $report[$objectName]['earned'] = bcadd($report[$objectName]['earned'], $journal['amount']);
-                $report[$objectName]['sum']    = bcadd($report[$objectName]['sum'], $journal['amount']);
-                $sums[$currencyId]['earned']   = bcadd($sums[$currencyId]['earned'], $journal['amount']);
-                $sums[$currencyId]['sum']      = bcadd($sums[$currencyId]['sum'], $journal['amount']);
+                $report[$objectName]['earned'] = bcadd($report[$objectName]['earned'], (string) $journal['amount']);
+                $report[$objectName]['sum']    = bcadd($report[$objectName]['sum'], (string) $journal['amount']);
+                $sums[$currencyId]['earned']   = bcadd($sums[$currencyId]['earned'], (string) $journal['amount']);
+                $sums[$currencyId]['sum']      = bcadd($sums[$currencyId]['sum'], (string) $journal['amount']);
             }
         }
 
-        return view('reports.double.partials.accounts-per-asset', compact('sums', 'report'));
+        return view('reports.double.partials.accounts-per-asset', ['sums' => $sums, 'report' => $report]);
     }
 
     /**
@@ -407,7 +409,7 @@ class DoubleController extends Controller
                 $result[] = [
                     'description'              => $journal['description'],
                     'transaction_group_id'     => $journal['transaction_group_id'],
-                    'amount_float'             => (float)$journal['amount'],
+                    'amount_float'             => (float) $journal['amount'],
                     'amount'                   => $journal['amount'],
                     'date'                     => $journal['date']->isoFormat($this->monthAndDayFormat),
                     'date_sort'                => $journal['date']->format('Y-m-d'),
@@ -428,9 +430,9 @@ class DoubleController extends Controller
         array_multisort($amounts, SORT_ASC, $result);
 
         try {
-            $result = view('reports.double.partials.top-expenses', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.double.partials.top-expenses', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($e->getMessage(), 0, $e);
@@ -455,7 +457,7 @@ class DoubleController extends Controller
                 $result[] = [
                     'description'              => $journal['description'],
                     'transaction_group_id'     => $journal['transaction_group_id'],
-                    'amount_float'             => (float)$journal['amount'],
+                    'amount_float'             => (float) $journal['amount'],
                     'amount'                   => $journal['amount'],
                     'date'                     => $journal['date']->isoFormat($this->monthAndDayFormat),
                     'date_sort'                => $journal['date']->format('Y-m-d'),
@@ -476,9 +478,9 @@ class DoubleController extends Controller
         array_multisort($amounts, SORT_DESC, $result);
 
         try {
-            $result = view('reports.double.partials.top-income', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.double.partials.top-income', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($e->getMessage(), 0, $e);

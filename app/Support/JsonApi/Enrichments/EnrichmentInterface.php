@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EnricherInterface.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -23,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\JsonApi\Enrichments;
 
+use FireflyIII\Models\UserGroup;
+use FireflyIII\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -30,5 +33,9 @@ interface EnrichmentInterface
 {
     public function enrich(Collection $collection): Collection;
 
-    public function enrichSingle(Model $model): Model;
+    public function enrichSingle(array|Model $model): array|Model;
+
+    public function setUser(User $user): void;
+
+    public function setUserGroup(UserGroup $userGroup): void;
 }

@@ -24,12 +24,16 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\User;
 
-use FireflyIII\Support\Notifications\UrlValidator;
+use FireflyIII\Notifications\ReturnsAvailableChannels;
+use FireflyIII\Support\Facades\FireflyConfig;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Request;
+use NotificationChannels\Pushover\PushoverMessage;
 
 /**
  * Class NewAccessToken
@@ -38,78 +42,68 @@ class NewAccessToken extends Notification
 {
     use Queueable;
 
-    /**
-     * Create a new notification instance.
-     */
-    public function __construct() {}
-
-    /**
-     * Get the array representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function toArray($notifiable)
+    public function toArray(User $notifiable): array
     {
         return [
         ];
     }
 
     /**
-     * Get the mail representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return MailMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toMail($notifiable)
+    public function toMail(User $notifiable): MailMessage
     {
-        return (new MailMessage())
-            ->markdown('emails.token-created')
-            ->subject((string)trans('email.access_token_created_subject'))
+        $ip        = Request::ip();
+        $host      = Steam::getHostName($ip);
+        $userAgent = Request::userAgent();
+        $time      = now(config('app.timezone'))->isoFormat((string) trans('config.date_time_js'));
+
+        return new MailMessage()
+            ->markdown('emails.token-created', ['ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])
+            ->subject((string) trans('email.access_token_created_subject'))
+        ;
+    }
+
+    //    public function toNtfy(User $notifiable): Message
+    //    {
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
+    //        $message  = new Message();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->title((string) trans('email.access_token_created_subject'));
+    //        $message->body((string) trans('email.access_token_created_body'));
+    //
+    //        return $message;
+    //    }
+
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     */
+    public function toPushover(User $notifiable): PushoverMessage
+    {
+        return PushoverMessage::create((string) trans('email.access_token_created_body'))
+            ->title((string) trans('email.access_token_created_subject'))
         ;
     }
 
     /**
-     * Get the Slack representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return SlackMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toSlack($notifiable)
+    public function toSlack(User $notifiable): SlackMessage
     {
-        return (new SlackMessage())->content((string)trans('email.access_token_created_body'));
+        return new SlackMessage()->content((string) trans('email.access_token_created_body'));
     }
 
     /**
-     * Get the notification's delivery channels.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function via($notifiable)
+    public function via(User $notifiable): array
     {
-        /** @var null|User $user */
-        $user     = auth()->user();
-        $slackUrl = null === $user ? '' : app('preferences')->getForUser(auth()->user(), 'slack_webhook_url', '')->data;
-        if (is_array($slackUrl)) {
-            $slackUrl = '';
-        }
-        if (UrlValidator::isValidWebhookURL((string)$slackUrl)) {
-            return ['mail', 'slack'];
+        $channels   = ReturnsAvailableChannels::returnChannels('user', $notifiable);
+        $isDemoSite = FireflyConfig::get('is_demo_site', false)->data;
+        if (true === $isDemoSite) {
+            return array_diff($channels, ['mail']);
         }
 
-        return ['mail'];
+        return $channels;
     }
 }

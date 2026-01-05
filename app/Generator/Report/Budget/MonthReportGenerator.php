@@ -24,11 +24,13 @@ declare(strict_types=1);
 namespace FireflyIII\Generator\Report\Budget;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Generator\Report\ReportGeneratorInterface;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
-use FireflyIII\Models\TransactionType;
 use Illuminate\Support\Collection;
+use Throwable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class MonthReportGenerator.
@@ -39,16 +41,8 @@ class MonthReportGenerator implements ReportGeneratorInterface
     private Collection $accounts;
     private Collection $budgets;
     private Carbon     $end;
-    private array      $expenses;
+    private array      $expenses = [];
     private Carbon     $start;
-
-    /**
-     * MonthReportGenerator constructor.
-     */
-    public function __construct()
-    {
-        $this->expenses = [];
-    }
 
     /**
      * Generates the report.
@@ -63,16 +57,16 @@ class MonthReportGenerator implements ReportGeneratorInterface
         try {
             $result = view(
                 'reports.budget.month',
-                compact('accountIds', 'budgetIds')
+                ['accountIds' => $accountIds, 'budgetIds' => $budgetIds]
             )
                 ->with('start', $this->start)->with('end', $this->end)
                 ->with('budgets', $this->budgets)
                 ->with('accounts', $this->accounts)
                 ->render()
             ;
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Cannot render reports.account.report: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+        } catch (Throwable $e) {
+            Log::error(sprintf('Cannot render reports.account.report: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = sprintf('Could not render report view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);
@@ -131,7 +125,7 @@ class MonthReportGenerator implements ReportGeneratorInterface
     protected function getExpenses(): array
     {
         if (0 !== count($this->expenses)) {
-            app('log')->debug('Return previous set of expenses.');
+            Log::debug('Return previous set of expenses.');
 
             return $this->expenses;
         }
@@ -139,7 +133,7 @@ class MonthReportGenerator implements ReportGeneratorInterface
         /** @var GroupCollectorInterface $collector */
         $collector      = app(GroupCollectorInterface::class);
         $collector->setAccounts($this->accounts)->setRange($this->start, $this->end)
-            ->setTypes([TransactionType::WITHDRAWAL])
+            ->setTypes([TransactionTypeEnum::WITHDRAWAL->value])
             ->withAccountInformation()
             ->withBudgetInformation()
             ->setBudgets($this->budgets)

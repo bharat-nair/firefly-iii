@@ -1,4 +1,5 @@
 <?php
+
 /**
  * IndexController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Category;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Category;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
@@ -31,6 +33,8 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class IndexController
@@ -49,7 +53,7 @@ class IndexController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.categories'));
+                app('view')->share('title', (string) trans('firefly.categories'));
                 app('view')->share('mainTitleIcon', 'fa-bookmark');
                 $this->repository = app(CategoryRepositoryInterface::class);
 
@@ -62,11 +66,14 @@ class IndexController extends Controller
      * Show all categories.
      *
      * @return Factory|View
+     *
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
      */
-    public function index(Request $request)
+    public function index(Request $request): Factory|\Illuminate\Contracts\View\View
     {
-        $page       = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
-        $pageSize   = (int)app('preferences')->get('listPageSize', 50)->data;
+        $page       = 0 === (int) $request->get('page') ? 1 : (int) $request->get('page');
+        $pageSize   = (int) Preferences::get('listPageSize', 50)->data;
         $collection = $this->repository->getCategories();
         $total      = $collection->count();
         $collection = $collection->slice(($page - 1) * $pageSize, $pageSize);
@@ -81,6 +88,6 @@ class IndexController extends Controller
         $categories = new LengthAwarePaginator($collection, $total, $pageSize, $page);
         $categories->setPath(route('categories.index'));
 
-        return view('categories.index', compact('categories'));
+        return view('categories.index', ['categories' => $categories]);
     }
 }

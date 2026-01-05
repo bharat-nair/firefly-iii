@@ -1,12 +1,12 @@
 // date ranges
 var ranges = {};
 {% for title, range in dateRangeConfig.ranges %}
-    ranges["{{ title }}"] = [moment("{{ range[0].format('Y-m-d') }}"), moment("{{ range[1].format('Y-m-d') }}")];
+    ranges["{{ title|escape('js') }}"] = [moment("{{ range[0].format('Y-m-d') }}"), moment("{{ range[1].format('Y-m-d') }}")];
 {% endfor %}
 
 // date range meta configuration
 var dateRangeMeta = {
-title: "{{ dateRangeTitle }}",
+title: "{{ dateRangeTitle|escape('js') }}",
 url: "{{ route('daterange') }}",
 labels: {
 apply: "{{ 'apply'|_ }}",
@@ -26,6 +26,7 @@ ranges: ranges
 };
 
 var uid = "{{ uid }}";
+var anonymous = {{ anonymous }};
 var language = "{{ language|escape }}";
 var locale = "{{ locale|escape }}";
 var currencyCode = '{{ currencyCode|escape('js') }}';
@@ -44,11 +45,15 @@ var todayText = ' {{ trans('firefly.today')|escape('js') }}';
 
 // some formatting stuff:
 var month_and_day_js = "{{ trans('config.month_and_day_js') }}";
+var date_time_js = "{{ trans('config.date_time_js') }}";
 var acc_config_new = {format: accountingConfig};
 
 // strings and translations used often:
 var helpPageTitle = "{{ trans('firefly.help_for_this_page')|escape('js') }}";
 var helpPageBody = "{{ trans('firefly.help_for_this_page_body')|escape('js') }}";
+
+var anonymous_warning_on_txt = "{{ trans('firefly.anonymous_warning_on')|escape('js') }}";
+var anonymous_warning_off_txt= "{{ trans('firefly.anonymous_warning_off')|escape('js') }}";
 
 var edit_selected_txt = "{{ trans('firefly.mass_edit')|escape('js') }}";
 var edit_bulk_selected_txt = "{{ trans('firefly.bulk_edit')|escape('js') }}";

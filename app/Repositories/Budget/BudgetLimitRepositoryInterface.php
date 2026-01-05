@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BudgetLimitRepositoryInterface.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,15 +25,24 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Budget;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface BudgetLimitRepositoryInterface
+ *
+ * @method setUserGroup(UserGroup $group)
+ * @method getUserGroup()
+ * @method getUser()
+ * @method checkUserGroupAccess(UserRoleEnum $role)
+ * @method setUser(null|Authenticatable|User $user)
+ * @method setUserGroupById(int $userGroupId)
  */
 interface BudgetLimitRepositoryInterface
 {
@@ -63,11 +73,13 @@ interface BudgetLimitRepositoryInterface
 
     public function getBudgetLimits(Budget $budget, ?Carbon $start = null, ?Carbon $end = null): Collection;
 
-    public function setUser(null|Authenticatable|User $user): void;
+    public function getNoteText(BudgetLimit $budgetLimit): string;
+
+    public function setNoteText(BudgetLimit $budgetLimit, string $text): void;
 
     public function store(array $data): BudgetLimit;
 
     public function update(BudgetLimit $budgetLimit, array $data): BudgetLimit;
 
-    public function updateLimitAmount(Budget $budget, Carbon $start, Carbon $end, string $amount): ?BudgetLimit;
+    // public function updateLimitAmount(Budget $budget, Carbon $start, Carbon $end, string $amount): ?BudgetLimit;
 }

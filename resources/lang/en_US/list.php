@@ -20,7 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Ignore this comment
+
 
 declare(strict_types=1);
 
@@ -29,6 +29,7 @@ return [
     'icon'                    => 'Icon',
     'id'                      => 'ID',
     'create_date'             => 'Created at',
+    'primary_currency'         => 'Primary currency',
     'update_date'             => 'Updated at',
     'updated_at'              => 'Updated at',
     'balance_before'          => 'Balance before',
@@ -42,6 +43,7 @@ return [
     'recurring_transaction'   => 'Recurring transaction',
     'next_due'                => 'Next due',
     'transaction_type'        => 'Type',
+    'running_balance'         => 'Running balance',
     'lastActivity'            => 'Last activity',
     'balanceDiff'             => 'Balance difference',
     'other_meta_data'         => 'Other meta data',
@@ -66,7 +68,7 @@ return [
     'balance_difference'      => 'Balance difference',
     'menu'                    => 'Menu',
 
-    // Ignore this comment
+
 
     'repeat_freq'             => 'Repeats',
     'description'             => 'Description',
@@ -85,7 +87,7 @@ return [
     'to'                      => 'To',
     'budget'                  => 'Budget',
     'category'                => 'Category',
-    'bill'                    => 'Bill',
+    'bill'                    => 'Subscription',
     'withdrawal'              => 'Withdrawal',
     'deposit'                 => 'Deposit',
     'transfer'                => 'Transfer',
@@ -105,7 +107,7 @@ return [
     'accounts_count'          => 'Number of accounts',
     'journals_count'          => 'Number of transactions',
     'attachments_count'       => 'Number of attachments',
-    'bills_count'             => 'Number of bills',
+    'bills_count'             => 'Number of subscriptions',
     'categories_count'        => 'Number of categories',
     'budget_count'            => 'Number of budgets',
     'rule_and_groups_count'   => 'Number of rules and rule groups',
@@ -134,7 +136,7 @@ return [
     'account_at_bunq'         => 'Account with bunq',
     'file_name'               => 'File name',
 
-    // Ignore this comment
+
 
     'file_size'               => 'File size',
     'file_type'               => 'File type',
@@ -163,4 +165,3 @@ return [
     'url'                     => 'URL',
     'secret'                  => 'Secret',
 ];
-// Ignore this comment

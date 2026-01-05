@@ -1,4 +1,5 @@
 <?php
+
 /**
  * CronController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\System;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Http\Response;
@@ -35,9 +37,9 @@ class CronController
     /**
      * @return Application|Response|ResponseFactory
      */
-    public function cron()
+    public function cron(): Response|ResponseFactory
     {
-        app('log')->error('The cron endpoint has moved to GET /api/v1/cron/[token]');
+        Log::error('The cron endpoint has moved to GET /api/v1/cron/[token]');
 
         return response('The cron endpoint has moved to GET /api/v1/cron/[token]', 500);
     }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AccountController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -26,6 +27,7 @@ namespace FireflyIII\Api\V1\Controllers\Models\Account;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Support\Facades\Preferences;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -54,15 +56,12 @@ class DestroyController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/accounts/deleteAccount
-     *
      * Remove the specified resource from storage.
      */
     public function destroy(Account $account): JsonResponse
     {
         $this->repository->destroy($account, null);
-        app('preferences')->mark();
+        Preferences::mark();
 
         return response()->json([], 204);
     }

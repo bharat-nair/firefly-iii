@@ -1,4 +1,5 @@
 <?php
+
 /**
  * UniqueIban.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,8 +24,10 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Illuminate\Support\Facades\Log;
+use Closure;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\AccountType;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Contracts\Validation\ValidationRule;
 
@@ -33,32 +36,29 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class UniqueIban implements ValidationRule
 {
-    private ?Account $account;
-    private array    $expectedTypes;
+    private array $expectedTypes = [];
 
     /**
      * Create a new rule instance.
      */
-    public function __construct(?Account $account, ?string $expectedType)
+    public function __construct(private readonly ?Account $account, ?string $expectedType)
     {
-        $this->account       = $account;
-        $this->expectedTypes = [];
         if (null === $expectedType) {
             return;
         }
         $this->expectedTypes = [$expectedType];
         // a very basic fix to make sure we get the correct account type:
         if ('expense' === $expectedType) {
-            $this->expectedTypes = [AccountType::EXPENSE];
+            $this->expectedTypes = [AccountTypeEnum::EXPENSE->value];
         }
         if ('revenue' === $expectedType) {
-            $this->expectedTypes = [AccountType::REVENUE];
+            $this->expectedTypes = [AccountTypeEnum::REVENUE->value];
         }
         if ('asset' === $expectedType) {
-            $this->expectedTypes = [AccountType::ASSET];
+            $this->expectedTypes = [AccountTypeEnum::ASSET->value];
         }
         if ('liabilities' === $expectedType) {
-            $this->expectedTypes = [AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE];
+            $this->expectedTypes = [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
         }
     }
 
@@ -67,13 +67,13 @@ class UniqueIban implements ValidationRule
      */
     public function message(): string
     {
-        return (string)trans('validation.unique_iban_for_user');
+        return (string) trans('validation.unique_iban_for_user');
     }
 
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!$this->passes($attribute, $value)) {
-            $fail((string)trans('validation.unique_iban_for_user'));
+            $fail((string) trans('validation.unique_iban_for_user'));
         }
     }
 
@@ -83,7 +83,7 @@ class UniqueIban implements ValidationRule
      * @param string $attribute
      * @param mixed  $value
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function passes($attribute, $value): bool
     {
@@ -93,6 +93,10 @@ class UniqueIban implements ValidationRule
         if (0 === count($this->expectedTypes)) {
             return true;
         }
+        if (is_array($value)) {
+            return false;
+        }
+        $value     = (string) $value;
         $maxCounts = $this->getMaxOccurrences();
 
         foreach ($maxCounts as $type => $max) {
@@ -100,9 +104,9 @@ class UniqueIban implements ValidationRule
             $value = Steam::filterSpaces($value);
 
             $count = $this->countHits($type, $value);
-            app('log')->debug(sprintf('Count for "%s" and IBAN "%s" is %d', $type, $value, $count));
+            Log::debug(sprintf('Count for "%s" and IBAN "%s" is %d', $type, $value, $count));
             if ($count > $max) {
-                app('log')->debug(
+                Log::debug(
                     sprintf(
                         'IBAN "%s" is in use with %d account(s) of type "%s", which is too much for expected types "%s"',
                         $value,
@@ -122,21 +126,21 @@ class UniqueIban implements ValidationRule
     private function getMaxOccurrences(): array
     {
         $maxCounts = [
-            AccountType::ASSET   => 0,
-            AccountType::EXPENSE => 0,
-            AccountType::REVENUE => 0,
-            'liabilities'        => 0,
+            AccountTypeEnum::ASSET->value   => 0,
+            AccountTypeEnum::EXPENSE->value => 0,
+            AccountTypeEnum::REVENUE->value => 0,
+            'liabilities'                   => 0,
         ];
 
-        if (in_array('expense', $this->expectedTypes, true) || in_array(AccountType::EXPENSE, $this->expectedTypes, true)) {
+        if (in_array('expense', $this->expectedTypes, true) || in_array(AccountTypeEnum::EXPENSE->value, $this->expectedTypes, true)) {
             // IBAN should be unique amongst expense and asset accounts.
             // may appear once in revenue accounts
-            $maxCounts[AccountType::REVENUE] = 1;
+            $maxCounts[AccountTypeEnum::REVENUE->value] = 1;
         }
-        if (in_array('revenue', $this->expectedTypes, true) || in_array(AccountType::REVENUE, $this->expectedTypes, true)) {
+        if (in_array('revenue', $this->expectedTypes, true) || in_array(AccountTypeEnum::REVENUE->value, $this->expectedTypes, true)) {
             // IBAN should be unique amongst revenue and asset accounts.
             // may appear once in expense accounts
-            $maxCounts[AccountType::EXPENSE] = 1;
+            $maxCounts[AccountTypeEnum::EXPENSE->value] = 1;
         }
 
         return $maxCounts;
@@ -146,7 +150,7 @@ class UniqueIban implements ValidationRule
     {
         $typesArray = [$type];
         if ('liabilities' === $type) {
-            $typesArray = [AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE];
+            $typesArray = [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
         }
         $query
                     = auth()->user()
@@ -156,7 +160,7 @@ class UniqueIban implements ValidationRule
                         ->whereIn('account_types.type', $typesArray)
         ;
 
-        if (null !== $this->account) {
+        if ($this->account instanceof Account) {
             $query->where('accounts.id', '!=', $this->account->id);
         }
 

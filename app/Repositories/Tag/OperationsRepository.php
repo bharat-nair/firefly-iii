@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OperationsRepository.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,19 +25,19 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Tag;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
-use FireflyIII\Models\TransactionType;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
 
 /**
  * Class OperationsRepository
  */
-class OperationsRepository implements OperationsRepositoryInterface
+class OperationsRepository implements OperationsRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * This method returns a list of all the withdrawal transaction journals (as arrays) set in that period
@@ -47,16 +48,16 @@ class OperationsRepository implements OperationsRepositoryInterface
     {
         /** @var GroupCollectorInterface $collector */
         $collector      = app(GroupCollectorInterface::class);
-        $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionType::WITHDRAWAL]);
+        $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::WITHDRAWAL->value]);
         $tagIds         = [];
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
-        if (null !== $tags && $tags->count() > 0) {
+        if ($tags instanceof Collection && $tags->count() > 0) {
             $collector->setTags($tags);
             $tagIds = $tags->pluck('id')->toArray();
         }
-        if (null === $tags || 0 === $tags->count()) {
+        if (!$tags instanceof Collection || 0 === $tags->count()) {
             $collector->setTags($this->getTags());
             $tagIds = $this->getTags()->pluck('id')->toArray();
         }
@@ -65,7 +66,7 @@ class OperationsRepository implements OperationsRepositoryInterface
         $array          = [];
         $listedJournals = [];
         foreach ($journals as $journal) {
-            $currencyId = (int)$journal['currency_id'];
+            $currencyId = (int) $journal['currency_id'];
             $array[$currencyId] ??= [
                 'tags'                    => [],
                 'currency_id'             => $currencyId,
@@ -77,9 +78,9 @@ class OperationsRepository implements OperationsRepositoryInterface
 
             // may have multiple tags:
             foreach ($journal['tags'] as $tag) {
-                $tagId                                                                  = (int)$tag['id'];
-                $tagName                                                                = (string)$tag['name'];
-                $journalId                                                              = (int)$journal['transaction_journal_id'];
+                $tagId                                                                  = (int) $tag['id'];
+                $tagName                                                                = (string) $tag['name'];
+                $journalId                                                              = (int) $journal['transaction_journal_id'];
                 if (!in_array($tagId, $tagIds, true)) {
                     continue;
                 }
@@ -113,13 +114,6 @@ class OperationsRepository implements OperationsRepositoryInterface
         return $array;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     private function getTags(): Collection
     {
         /** @var TagRepositoryInterface $repository */
@@ -137,16 +131,16 @@ class OperationsRepository implements OperationsRepositoryInterface
     {
         /** @var GroupCollectorInterface $collector */
         $collector      = app(GroupCollectorInterface::class);
-        $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionType::DEPOSIT]);
+        $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::DEPOSIT->value]);
         $tagIds         = [];
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
-        if (null !== $tags && $tags->count() > 0) {
+        if ($tags instanceof Collection && $tags->count() > 0) {
             $collector->setTags($tags);
             $tagIds = $tags->pluck('id')->toArray();
         }
-        if (null === $tags || 0 === $tags->count()) {
+        if (!$tags instanceof Collection || 0 === $tags->count()) {
             $collector->setTags($this->getTags());
             $tagIds = $this->getTags()->pluck('id')->toArray();
         }
@@ -156,7 +150,7 @@ class OperationsRepository implements OperationsRepositoryInterface
         $listedJournals = [];
 
         foreach ($journals as $journal) {
-            $currencyId = (int)$journal['currency_id'];
+            $currencyId = (int) $journal['currency_id'];
             $array[$currencyId] ??= [
                 'tags'                    => [],
                 'currency_id'             => $currencyId,
@@ -168,9 +162,9 @@ class OperationsRepository implements OperationsRepositoryInterface
 
             // may have multiple tags:
             foreach ($journal['tags'] as $tag) {
-                $tagId                                                                  = (int)$tag['id'];
-                $tagName                                                                = (string)$tag['name'];
-                $journalId                                                              = (int)$journal['transaction_journal_id'];
+                $tagId                                                                  = (int) $tag['id'];
+                $tagName                                                                = (string) $tag['name'];
+                $journalId                                                              = (int) $journal['transaction_journal_id'];
 
                 if (!in_array($tagId, $tagIds, true)) {
                     continue;
@@ -186,7 +180,7 @@ class OperationsRepository implements OperationsRepositoryInterface
                     'name'                 => $tagName,
                     'transaction_journals' => [],
                 ];
-                $journalId                                                              = (int)$journal['transaction_journal_id'];
+                $journalId                                                              = (int) $journal['transaction_journal_id'];
                 $array[$currencyId]['tags'][$tagId]['transaction_journals'][$journalId] = [
                     'amount'                   => app('steam')->positive($journal['amount']),
                     'date'                     => $journal['date'],

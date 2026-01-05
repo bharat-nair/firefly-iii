@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DestroyController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,13 +24,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Data;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Data\DestroyRequest;
+use FireflyIII\Enums\AccountTypeEnum;
+use FireflyIII\Enums\TransactionTypeEnum;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\AccountType;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Repositories\Budget\AvailableBudgetRepositoryInterface;
@@ -44,6 +47,7 @@ use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
 use FireflyIII\Repositories\Tag\TagRepositoryInterface;
 use FireflyIII\Services\Internal\Destroy\AccountDestroyService;
 use FireflyIII\Services\Internal\Destroy\JournalDestroyService;
+use FireflyIII\Support\Facades\Preferences;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
@@ -54,21 +58,29 @@ class DestroyController extends Controller
 {
     private bool $unused;
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/destroyData
-     *
-     * @throws FireflyException
-     */
+    protected array $acceptedRoles = [UserRoleEnum::FULL];
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->middleware(
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
+
+                return $next($request);
+            }
+        );
+    }
+
     public function destroy(DestroyRequest $request): JsonResponse
     {
         $objects         = $request->getObjects();
-        $this->unused    = $request->boolean('unused', false);
+        $this->unused    = $request->boolean('unused');
 
-        $allExceptAssets = [AccountType::BENEFICIARY, AccountType::CASH, AccountType::CREDITCARD, AccountType::DEFAULT, AccountType::EXPENSE, AccountType::IMPORT, AccountType::INITIAL_BALANCE, AccountType::LIABILITY_CREDIT, AccountType::RECONCILIATION, AccountType::REVENUE];
-        $all             = [AccountType::ASSET, AccountType::BENEFICIARY, AccountType::CASH, AccountType::CREDITCARD, AccountType::DEBT, AccountType::DEFAULT, AccountType::EXPENSE, AccountType::IMPORT, AccountType::INITIAL_BALANCE, AccountType::LIABILITY_CREDIT, AccountType::LOAN, AccountType::MORTGAGE, AccountType::RECONCILIATION];
-        $liabilities     = [AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE, AccountType::CREDITCARD];
-        $transactions    = [TransactionType::WITHDRAWAL, TransactionType::DEPOSIT, TransactionType::TRANSFER, TransactionType::RECONCILIATION];
+        $allExceptAssets = [AccountTypeEnum::BENEFICIARY->value, AccountTypeEnum::CASH->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::DEFAULT->value, AccountTypeEnum::EXPENSE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::LIABILITY_CREDIT->value, AccountTypeEnum::RECONCILIATION->value, AccountTypeEnum::REVENUE->value];
+        $all             = [AccountTypeEnum::ASSET->value, AccountTypeEnum::BENEFICIARY->value, AccountTypeEnum::CASH->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::DEFAULT->value, AccountTypeEnum::EXPENSE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::LIABILITY_CREDIT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::RECONCILIATION->value];
+        $liabilities     = [AccountTypeEnum::DEBT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::CREDITCARD->value];
+        $transactions    = [TransactionTypeEnum::WITHDRAWAL->value, TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::TRANSFER->value, TransactionTypeEnum::RECONCILIATION->value];
 
         match ($objects) {
             'budgets'                => $this->destroyBudgets(),
@@ -81,18 +93,18 @@ class DestroyController extends Controller
             'object_groups'          => $this->destroyObjectGroups(),
             'not_assets_liabilities' => $this->destroyAccounts($allExceptAssets),
             'accounts'               => $this->destroyAccounts($all),
-            'asset_accounts'         => $this->destroyAccounts([AccountType::ASSET, AccountType::DEFAULT]),
-            'expense_accounts'       => $this->destroyAccounts([AccountType::BENEFICIARY, AccountType::EXPENSE]),
-            'revenue_accounts'       => $this->destroyAccounts([AccountType::REVENUE]),
+            'asset_accounts'         => $this->destroyAccounts([AccountTypeEnum::ASSET->value, AccountTypeEnum::DEFAULT->value]),
+            'expense_accounts'       => $this->destroyAccounts([AccountTypeEnum::BENEFICIARY->value, AccountTypeEnum::EXPENSE->value]),
+            'revenue_accounts'       => $this->destroyAccounts([AccountTypeEnum::REVENUE->value]),
             'liabilities'            => $this->destroyAccounts($liabilities),
             'transactions'           => $this->destroyTransactions($transactions),
-            'withdrawals'            => $this->destroyTransactions([TransactionType::WITHDRAWAL]),
-            'deposits'               => $this->destroyTransactions([TransactionType::DEPOSIT]),
-            'transfers'              => $this->destroyTransactions([TransactionType::TRANSFER]),
+            'withdrawals'            => $this->destroyTransactions([TransactionTypeEnum::WITHDRAWAL->value]),
+            'deposits'               => $this->destroyTransactions([TransactionTypeEnum::DEPOSIT->value]),
+            'transfers'              => $this->destroyTransactions([TransactionTypeEnum::TRANSFER->value]),
             default                  => throw new FireflyException(sprintf('200033: This endpoint can\'t handle object "%s"', $objects)),
         };
 
-        app('preferences')->mark();
+        Preferences::mark();
 
         return response()->json([], 204);
     }
@@ -174,15 +186,15 @@ class DestroyController extends Controller
         /** @var Account $account */
         foreach ($collection as $account) {
             $count = $account->transactions()->count();
-            if (true === $this->unused && 0 === $count) {
-                app('log')->info(sprintf('Deleted unused account #%d "%s"', $account->id, $account->name));
+            if ($this->unused && 0 === $count) {
+                Log::info(sprintf('Deleted unused account #%d "%s"', $account->id, $account->name));
                 Log::channel('audit')->info(sprintf('Deleted unused account #%d "%s"', $account->id, $account->name));
                 $service->destroy($account, null);
 
                 continue;
             }
             if (false === $this->unused) {
-                app('log')->info(sprintf('Deleting account #%d "%s"', $account->id, $account->name));
+                Log::info(sprintf('Deleting account #%d "%s"', $account->id, $account->name));
                 Log::channel('audit')->warning(sprintf('Deleted account #%d "%s"', $account->id, $account->name));
                 $service->destroy($account, null);
             }

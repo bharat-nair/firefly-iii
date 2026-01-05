@@ -33,6 +33,7 @@ trait CreatesObjectGroups
 {
     protected function findObjectGroupById(int $groupId): ?ObjectGroup
     {
+        /** @var null|ObjectGroup */
         return $this->user->objectGroups()->where('id', $groupId)->first();
     }
 
@@ -56,7 +57,7 @@ trait CreatesObjectGroups
 
     protected function getObjectGroupMaxOrder(): int
     {
-        return (int)$this->user->objectGroups()->max('order');
+        return (int) $this->user->objectGroups()->max('order');
     }
 
     protected function hasObjectGroup(string $title): bool
@@ -66,6 +67,7 @@ trait CreatesObjectGroups
 
     protected function findObjectGroup(string $title): ?ObjectGroup
     {
+        /** @var null|ObjectGroup */
         return $this->user->objectGroups()->where('title', $title)->first();
     }
 }

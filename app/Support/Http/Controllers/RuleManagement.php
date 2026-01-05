@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RuleManagement.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,10 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Http\Controllers;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
 use FireflyIII\Support\Search\OperatorQuerySearch;
 use Illuminate\Http\Request;
+use Throwable;
 
 /**
  * Trait RuleManagement
@@ -53,9 +56,9 @@ trait RuleManagement
                             'count'      => $index + 1,
                         ]
                     )->render();
-                } catch (\Throwable $e) {
-                    app('log')->error(sprintf('Throwable was thrown in getPreviousActions(): %s', $e->getMessage()));
-                    app('log')->error($e->getTraceAsString());
+                } catch (Throwable $e) {
+                    Log::error(sprintf('Throwable was thrown in getPreviousActions(): %s', $e->getMessage()));
+                    Log::error($e->getTraceAsString());
 
                     throw new FireflyException(sprintf('Could not render: %s', $e->getMessage()), 0, $e);
                 }
@@ -98,9 +101,9 @@ trait RuleManagement
                             'triggers'      => $triggers,
                         ]
                     )->render();
-                } catch (\Throwable $e) {
-                    app('log')->debug(sprintf('Throwable was thrown in getPreviousTriggers(): %s', $e->getMessage()));
-                    app('log')->error($e->getTraceAsString());
+                } catch (Throwable $e) {
+                    Log::debug(sprintf('Throwable was thrown in getPreviousTriggers(): %s', $e->getMessage()));
+                    Log::error($e->getTraceAsString());
 
                     throw new FireflyException(sprintf('Could not render: %s', $e->getMessage()), 0, $e);
                 }
@@ -144,9 +147,9 @@ trait RuleManagement
                         'triggers'      => $triggers,
                     ]
                 )->render();
-            } catch (\Throwable $e) {
-                app('log')->debug(sprintf('Throwable was thrown in getPreviousTriggers(): %s', $e->getMessage()));
-                app('log')->error($e->getTraceAsString());
+            } catch (Throwable $e) {
+                Log::debug(sprintf('Throwable was thrown in getPreviousTriggers(): %s', $e->getMessage()));
+                Log::error($e->getTraceAsString());
 
                 throw new FireflyException(sprintf('Could not render: %s', $e->getMessage()), 0, $e);
             }

@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DetectedNewIPAddress.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -33,15 +34,8 @@ class DetectedNewIPAddress extends Event
 {
     use SerializesModels;
 
-    public string $ipAddress;
-    public User   $user;
-
     /**
      * Create a new event instance. This event is triggered when a new user registers.
      */
-    public function __construct(User $user, string $ipAddress)
-    {
-        $this->ipAddress = $ipAddress;
-        $this->user      = $user;
-    }
+    public function __construct(public User $user) {}
 }

@@ -64,26 +64,23 @@ class AccountController extends Controller
         );
     }
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/insight/insightIncomeAsset
-     */
     public function asset(GenericRequest $request): JsonResponse
     {
         $start         = $request->getStart();
         $end           = $request->getEnd();
         $assetAccounts = $request->getAssetAccounts();
+
         $income        = $this->opsRepository->sumIncomeByDestination($start, $end, $assetAccounts);
         $result        = [];
 
         /** @var array $entry */
         foreach ($income as $entry) {
             $result[] = [
-                'id'               => (string)$entry['id'],
+                'id'               => (string) $entry['id'],
                 'name'             => $entry['name'],
                 'difference'       => $entry['sum'],
-                'difference_float' => (float)$entry['sum'], // float but on purpose.
-                'currency_id'      => (string)$entry['currency_id'],
+                'difference_float' => (float) $entry['sum'], // float but on purpose.
+                'currency_id'      => (string) $entry['currency_id'],
                 'currency_code'    => $entry['currency_code'],
             ];
         }
@@ -91,10 +88,6 @@ class AccountController extends Controller
         return response()->json($result);
     }
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/insight/insightIncomeRevenue
-     */
     public function revenue(GenericRequest $request): JsonResponse
     {
         $start           = $request->getStart();
@@ -107,11 +100,11 @@ class AccountController extends Controller
         /** @var array $entry */
         foreach ($income as $entry) {
             $result[] = [
-                'id'               => (string)$entry['id'],
+                'id'               => (string) $entry['id'],
                 'name'             => $entry['name'],
                 'difference'       => $entry['sum'],
-                'difference_float' => (float)$entry['sum'], // float but on purpose.
-                'currency_id'      => (string)$entry['currency_id'],
+                'difference_float' => (float) $entry['sum'], // float but on purpose.
+                'currency_id'      => (string) $entry['currency_id'],
                 'currency_code'    => $entry['currency_code'],
             ];
         }

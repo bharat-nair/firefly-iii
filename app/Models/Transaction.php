@@ -24,8 +24,10 @@ declare(strict_types=1);
 namespace FireflyIII\Models;
 
 use Carbon\Carbon;
+use FireflyIII\Handlers\Observer\TransactionObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
-use GeneaLabs\LaravelModelCaching\Traits\Cachable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -34,28 +36,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @mixin IdeHelperTransaction
- */
+#[ObservedBy([TransactionObserver::class])]
 class Transaction extends Model
 {
-    use Cachable;
     use HasFactory;
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                      = [
-            'created_at'          => 'datetime',
-            'updated_at'          => 'datetime',
-            'deleted_at'          => 'datetime',
-            'identifier'          => 'int',
-            'encrypted'           => 'boolean', // model does not have these fields though
-            'bill_name_encrypted' => 'boolean',
-            'reconciled'          => 'boolean',
-            'balance_dirty'       => 'boolean',
-            'date'                => 'datetime',
-        ];
 
     protected $fillable
                       = [
@@ -63,6 +49,8 @@ class Transaction extends Model
             'transaction_journal_id',
             'description',
             'amount',
+            'native_amount',
+            'native_foreign_amount',
             'identifier',
             'transaction_currency_id',
             'foreign_currency_id',
@@ -105,9 +93,35 @@ class Transaction extends Model
     }
 
     /**
+     * @param mixed $value
+     */
+    public function setAmountAttribute($value): void
+    {
+        $this->attributes['amount'] = (string)$value;
+    }
+
+    public function transactionCurrency(): BelongsTo
+    {
+        return $this->belongsTo(TransactionCurrency::class);
+    }
+
+    public function transactionJournal(): BelongsTo
+    {
+        return $this->belongsTo(TransactionJournal::class);
+    }
+
+    protected function accountId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value): int => (int)$value,
+        );
+    }
+
+    /**
      * Check for transactions AFTER a specified date.
      */
-    public function scopeAfter(Builder $query, Carbon $date): void
+    #[Scope]
+    protected function after(Builder $query, Carbon $date): void
     {
         if (!self::isJoined($query, 'transaction_journals')) {
             $query->leftJoin('transaction_journals', 'transaction_journals.id', '=', 'transactions.transaction_journal_id');
@@ -132,9 +146,27 @@ class Transaction extends Model
     }
 
     /**
+     * Get the amount
+     */
+    protected function amount(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value): string => (string)$value,
+        );
+    }
+
+    protected function balanceDirty(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value): bool => 1 === (int)$value,
+        );
+    }
+
+    /**
      * Check for transactions BEFORE the specified date.
      */
-    public function scopeBefore(Builder $query, Carbon $date): void
+    #[Scope]
+    protected function before(Builder $query, Carbon $date): void
     {
         if (!self::isJoined($query, 'transaction_journals')) {
             $query->leftJoin('transaction_journals', 'transaction_journals.id', '=', 'transactions.transaction_journal_id');
@@ -142,7 +174,46 @@ class Transaction extends Model
         $query->where('transaction_journals.date', '<=', $date->format('Y-m-d 23:59:59'));
     }
 
-    public function scopeTransactionTypes(Builder $query, array $types): void
+    protected function casts(): array
+    {
+        return [
+            'created_at'            => 'datetime',
+            'updated_at'            => 'datetime',
+            'deleted_at'            => 'datetime',
+            'identifier'            => 'int',
+            'encrypted'             => 'boolean', // model does not have these fields though
+            'bill_name_encrypted'   => 'boolean',
+            'reconciled'            => 'boolean',
+            'balance_dirty'         => 'boolean',
+            'balance_before'        => 'string',
+            'balance_after'         => 'string',
+            'date'                  => 'datetime',
+            'amount'                => 'string',
+            'foreign_amount'        => 'string',
+            'native_amount'         => 'string',
+            'native_foreign_amount' => 'string',
+        ];
+    }
+
+    /**
+     * Get the foreign amount
+     */
+    protected function foreignAmount(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value): string => (string)$value,
+        );
+    }
+
+    protected function transactionJournalId(): Attribute
+    {
+        return Attribute::make(
+            get: static fn ($value): int => (int)$value,
+        );
+    }
+
+    #[Scope]
+    protected function transactionTypes(Builder $query, array $types): void
     {
         if (!self::isJoined($query, 'transaction_journals')) {
             $query->leftJoin('transaction_journals', 'transaction_journals.id', '=', 'transactions.transaction_journal_id');
@@ -152,64 +223,5 @@ class Transaction extends Model
             $query->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id');
         }
         $query->whereIn('transaction_types.type', $types);
-    }
-
-    /**
-     * @param mixed $value
-     */
-    public function setAmountAttribute($value): void
-    {
-        $this->attributes['amount'] = (string)$value;
-    }
-
-    public function transactionCurrency(): BelongsTo
-    {
-        return $this->belongsTo(TransactionCurrency::class);
-    }
-
-    public function transactionJournal(): BelongsTo
-    {
-        return $this->belongsTo(TransactionJournal::class);
-    }
-
-    protected function accountId(): Attribute
-    {
-        return Attribute::make(
-            get: static fn ($value) => (int)$value,
-        );
-    }
-
-    protected function balanceDirty(): Attribute
-    {
-        return Attribute::make(
-            get: static fn ($value) => 1 === (int)$value,
-        );
-    }
-
-    /**
-     * Get the amount
-     */
-    protected function amount(): Attribute
-    {
-        return Attribute::make(
-            get: static fn ($value) => (string)$value,
-        );
-    }
-
-    /**
-     * Get the foreign amount
-     */
-    protected function foreignAmount(): Attribute
-    {
-        return Attribute::make(
-            get: static fn ($value) => (string)$value,
-        );
-    }
-
-    protected function transactionJournalId(): Attribute
-    {
-        return Attribute::make(
-            get: static fn ($value) => (int)$value,
-        );
     }
 }

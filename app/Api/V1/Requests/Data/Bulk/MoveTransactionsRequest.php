@@ -24,12 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Data\Bulk;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class MoveTransactionsRequest
@@ -74,7 +74,7 @@ class MoveTransactionsRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 
@@ -83,12 +83,12 @@ class MoveTransactionsRequest extends FormRequest
         $data                = $validator->getData();
         $repository          = app(AccountRepositoryInterface::class);
         $repository->setUser(auth()->user());
-        $original            = $repository->find((int)$data['original_account']);
-        $destination         = $repository->find((int)$data['destination_account']);
+        $original            = $repository->find((int) $data['original_account']);
+        $destination         = $repository->find((int) $data['destination_account']);
 
         // not the same type:
         if ($original->accountType->type !== $destination->accountType->type) {
-            $validator->errors()->add('title', (string)trans('validation.same_account_type'));
+            $validator->errors()->add('title', (string) trans('validation.same_account_type'));
 
             return;
         }
@@ -98,7 +98,7 @@ class MoveTransactionsRequest extends FormRequest
 
         // check different scenario's.
         if (null === $originalCurrency xor null === $destinationCurrency) {
-            $validator->errors()->add('title', (string)trans('validation.same_account_currency'));
+            $validator->errors()->add('title', (string) trans('validation.same_account_currency'));
 
             return;
         }
@@ -107,7 +107,7 @@ class MoveTransactionsRequest extends FormRequest
             return;
         }
         if ($originalCurrency->code !== $destinationCurrency->code) {
-            $validator->errors()->add('title', (string)trans('validation.same_account_currency'));
+            $validator->errors()->add('title', (string) trans('validation.same_account_currency'));
         }
     }
 }

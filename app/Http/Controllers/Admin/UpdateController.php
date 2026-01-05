@@ -23,9 +23,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Admin;
 
+use Carbon\Carbon;
 use FireflyIII\Helpers\Update\UpdateTrait;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Middleware\IsDemoUser;
+use FireflyIII\Support\Facades\FireflyConfig;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,7 +49,7 @@ class UpdateController extends Controller
         parent::__construct();
         $this->middleware(
             static function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.administration'));
+                app('view')->share('title', (string) trans('firefly.system_settings'));
                 app('view')->share('mainTitleIcon', 'fa-hand-spock-o');
 
                 return $next($request);
@@ -61,46 +63,44 @@ class UpdateController extends Controller
      *
      * @return Factory|View
      */
-    public function index()
+    public function index(): Factory|\Illuminate\Contracts\View\View
     {
-        $subTitle        = (string)trans('firefly.update_check_title');
+        $subTitle        = (string) trans('firefly.update_check_title');
         $subTitleIcon    = 'fa-star';
-        $permission      = app('fireflyconfig')->get('permission_update_check', -1);
-        $channel         = app('fireflyconfig')->get('update_channel', 'stable');
+        $permission      = FireflyConfig::get('permission_update_check', -1);
+        $channel         = FireflyConfig::get('update_channel', 'stable');
         $selected        = $permission->data;
         $channelSelected = $channel->data;
         $options         = [
-            -1 => (string)trans('firefly.updates_ask_me_later'),
-            0  => (string)trans('firefly.updates_do_not_check'),
-            1  => (string)trans('firefly.updates_enable_check'),
+            -1 => (string) trans('firefly.updates_ask_me_later'),
+            0  => (string) trans('firefly.updates_do_not_check'),
+            1  => (string) trans('firefly.updates_enable_check'),
         ];
 
         $channelOptions  = [
-            'stable' => (string)trans('firefly.update_channel_stable'),
-            'beta'   => (string)trans('firefly.update_channel_beta'),
-            'alpha'  => (string)trans('firefly.update_channel_alpha'),
+            'stable' => (string) trans('firefly.update_channel_stable'),
+            'beta'   => (string) trans('firefly.update_channel_beta'),
+            'alpha'  => (string) trans('firefly.update_channel_alpha'),
         ];
 
-        return view('admin.update.index', compact('subTitle', 'subTitleIcon', 'selected', 'options', 'channelSelected', 'channelOptions'));
+        return view('settings.update.index', ['subTitle' => $subTitle, 'subTitleIcon' => $subTitleIcon, 'selected' => $selected, 'options' => $options, 'channelSelected' => $channelSelected, 'channelOptions' => $channelOptions]);
     }
 
     /**
      * Post new settings.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function post(Request $request)
+    public function post(Request $request): Redirector|RedirectResponse
     {
-        $checkForUpdates = (int)$request->get('check_for_updates');
+        $checkForUpdates = (int) $request->get('check_for_updates');
         $channel         = $request->get('update_channel');
         $channel         = in_array($channel, ['stable', 'beta', 'alpha'], true) ? $channel : 'stable';
 
-        app('fireflyconfig')->set('permission_update_check', $checkForUpdates);
-        app('fireflyconfig')->set('last_update_check', time());
-        app('fireflyconfig')->set('update_channel', $channel);
-        session()->flash('success', (string)trans('firefly.configuration_updated'));
+        FireflyConfig::set('permission_update_check', $checkForUpdates);
+        FireflyConfig::set('last_update_check', Carbon::now()->getTimestamp());
+        FireflyConfig::set('update_channel', $channel);
+        session()->flash('success', (string) trans('firefly.configuration_updated'));
 
-        return redirect(route('admin.update-check'));
+        return redirect(route('settings.update-check'));
     }
 
     /**
@@ -112,6 +112,6 @@ class UpdateController extends Controller
 
         session()->flash($release['level'], $release['message']);
 
-        return redirect(route('admin.update-check'));
+        return redirect(route('settings.update-check'));
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * DateCalculation.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Http\Controllers;
 
+use FireflyIII\Support\Facades\Navigation;
 use Carbon\Carbon;
 
 /**
@@ -76,7 +78,7 @@ trait DateCalculation
             $step = '1M';
         }
         if ($months > 100) {
-            $step = '1Y';
+            return '1Y';
         }
 
         return $step;
@@ -92,18 +94,18 @@ trait DateCalculation
         $loop    = [];
 
         /** @var Carbon $current */
-        $current = app('navigation')->startOfPeriod($date, $range);
-        $current = app('navigation')->endOfPeriod($current, $range);
+        $current = Navigation::startOfPeriod($date, $range);
+        $current = Navigation::endOfPeriod($current, $range);
         $current->addDay();
         $count   = 0;
 
         while ($count < 12) {
-            $current      = app('navigation')->endOfPeriod($current, $range);
-            $currentStart = app('navigation')->startOfPeriod($current, $range);
+            $current      = Navigation::endOfPeriod($current, $range);
+            $currentStart = Navigation::startOfPeriod($current, $range);
 
             $loop[]       = [
                 'label' => $current->format('Y-m-d'),
-                'title' => app('navigation')->periodShow($current, $range),
+                'title' => Navigation::periodShow($current, $range),
                 'start' => clone $currentStart,
                 'end'   => clone $current,
             ];
@@ -124,15 +126,15 @@ trait DateCalculation
         $loop    = [];
 
         /** @var Carbon $current */
-        $current = app('navigation')->startOfPeriod($date, $range);
+        $current = Navigation::startOfPeriod($date, $range);
         $count   = 0;
         while ($count < 12) {
             $current->subDay();
-            $current    = app('navigation')->startOfPeriod($current, $range);
-            $currentEnd = app('navigation')->endOfPeriod($current, $range);
+            $current    = Navigation::startOfPeriod($current, $range);
+            $currentEnd = Navigation::endOfPeriod($current, $range);
             $loop[]     = [
                 'label' => $current->format('Y-m-d'),
-                'title' => app('navigation')->periodShow($current, $range),
+                'title' => Navigation::periodShow($current, $range),
                 'start' => clone $current,
                 'end'   => clone $currentEnd,
             ];

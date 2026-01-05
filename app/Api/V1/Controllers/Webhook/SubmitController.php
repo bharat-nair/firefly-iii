@@ -1,4 +1,5 @@
 <?php
+
 /*
  * SubmitController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -75,6 +76,6 @@ class SubmitController extends Controller
             SendWebhookMessage::dispatch($message)->afterResponse();
         }
 
-        return response()->json([]);
+        return response()->json();
     }
 }

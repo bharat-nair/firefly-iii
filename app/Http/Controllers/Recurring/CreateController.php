@@ -1,4 +1,5 @@
 <?php
+
 /**
  * CreateController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,11 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Recurring;
 
+use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Enums\RecurrenceRepetitionWeekend;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\RecurrenceFormRequest;
-use FireflyIII\Models\RecurrenceRepetition;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
@@ -48,7 +50,7 @@ class CreateController extends Controller
     private AttachmentHelperInterface    $attachments;
     private BillRepositoryInterface      $billRepository;
     private BudgetRepositoryInterface    $budgetRepos;
-    private RecurringRepositoryInterface $recurring;
+    private RecurringRepositoryInterface $repository;
 
     /**
      * CreateController constructor.
@@ -61,10 +63,10 @@ class CreateController extends Controller
         $this->middleware(
             function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-paint-brush');
-                app('view')->share('title', (string)trans('firefly.recurrences'));
-                app('view')->share('subTitle', (string)trans('firefly.create_new_recurrence'));
+                app('view')->share('title', (string) trans('firefly.recurrences'));
+                app('view')->share('subTitle', (string) trans('firefly.create_new_recurrence'));
 
-                $this->recurring      = app(RecurringRepositoryInterface::class);
+                $this->repository     = app(RecurringRepositoryInterface::class);
                 $this->budgetRepos    = app(BudgetRepositoryInterface::class);
                 $this->attachments    = app(AttachmentHelperInterface::class);
                 $this->billRepository = app(BillRepositoryInterface::class);
@@ -79,11 +81,10 @@ class CreateController extends Controller
      *
      * @return Factory|View
      */
-    public function create(Request $request)
+    public function create(Request $request): Factory|\Illuminate\Contracts\View\View
     {
         $budgets           = app('expandedform')->makeSelectListWithEmpty($this->budgetRepos->getActiveBudgets());
         $bills             = app('expandedform')->makeSelectListWithEmpty($this->billRepository->getActiveBills());
-        $defaultCurrency   = app('amount')->getDefaultCurrency();
         $tomorrow          = today(config('app.timezone'));
         $oldRepetitionType = $request->old('repetition_type');
         $tomorrow->addDay();
@@ -94,41 +95,38 @@ class CreateController extends Controller
         }
         $request->session()->forget('recurring.create.fromStore');
         $repetitionEnds    = [
-            'forever'    => (string)trans('firefly.repeat_forever'),
-            'until_date' => (string)trans('firefly.repeat_until_date'),
-            'times'      => (string)trans('firefly.repeat_times'),
+            'forever'    => (string) trans('firefly.repeat_forever'),
+            'until_date' => (string) trans('firefly.repeat_until_date'),
+            'times'      => (string) trans('firefly.repeat_times'),
         ];
         $weekendResponses  = [
-            RecurrenceRepetition::WEEKEND_DO_NOTHING    => (string)trans('firefly.do_nothing'),
-            RecurrenceRepetition::WEEKEND_SKIP_CREATION => (string)trans('firefly.skip_transaction'),
-            RecurrenceRepetition::WEEKEND_TO_FRIDAY     => (string)trans('firefly.jump_to_friday'),
-            RecurrenceRepetition::WEEKEND_TO_MONDAY     => (string)trans('firefly.jump_to_monday'),
+            RecurrenceRepetitionWeekend::WEEKEND_DO_NOTHING->value    => (string) trans('firefly.do_nothing'),
+            RecurrenceRepetitionWeekend::WEEKEND_SKIP_CREATION->value => (string) trans('firefly.skip_transaction'),
+            RecurrenceRepetitionWeekend::WEEKEND_TO_FRIDAY->value     => (string) trans('firefly.jump_to_friday'),
+            RecurrenceRepetitionWeekend::WEEKEND_TO_MONDAY->value     => (string) trans('firefly.jump_to_monday'),
         ];
         $hasOldInput       = null !== $request->old('_token'); // flash some data
         $preFilled         = [
             'first_date'       => $tomorrow->format('Y-m-d'),
             'transaction_type' => $hasOldInput ? $request->old('transaction_type') : 'withdrawal',
-            'active'           => $hasOldInput ? (bool)$request->old('active') : true,
-            'apply_rules'      => $hasOldInput ? (bool)$request->old('apply_rules') : true,
+            'active'           => $hasOldInput ? (bool) $request->old('active') : true,
+            'apply_rules'      => $hasOldInput ? (bool) $request->old('apply_rules') : true,
         ];
         $request->session()->flash('preFilled', $preFilled);
 
         return view(
             'recurring.create',
-            compact('tomorrow', 'oldRepetitionType', 'bills', 'weekendResponses', 'preFilled', 'repetitionEnds', 'defaultCurrency', 'budgets')
+            ['tomorrow' => $tomorrow, 'oldRepetitionType' => $oldRepetitionType, 'bills' => $bills, 'weekendResponses' => $weekendResponses, 'preFilled' => $preFilled, 'repetitionEnds' => $repetitionEnds, 'budgets' => $budgets]
         );
     }
 
     /**
-     * @return Factory|\Illuminate\Contracts\View\View
-     *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    public function createFromJournal(Request $request, TransactionJournal $journal)
+    public function createFromJournal(Request $request, TransactionJournal $journal): Factory|\Illuminate\Contracts\View\View
     {
         $budgets           = app('expandedform')->makeSelectListWithEmpty($this->budgetRepos->getActiveBudgets());
         $bills             = app('expandedform')->makeSelectListWithEmpty($this->billRepository->getActiveBills());
-        $defaultCurrency   = app('amount')->getDefaultCurrency();
         $tomorrow          = today(config('app.timezone'));
         $oldRepetitionType = $request->old('repetition_type');
         $tomorrow->addDay();
@@ -139,19 +137,19 @@ class CreateController extends Controller
         }
         $request->session()->forget('recurring.create.fromStore');
         $repetitionEnds    = [
-            'forever'    => (string)trans('firefly.repeat_forever'),
-            'until_date' => (string)trans('firefly.repeat_until_date'),
-            'times'      => (string)trans('firefly.repeat_times'),
+            'forever'    => (string) trans('firefly.repeat_forever'),
+            'until_date' => (string) trans('firefly.repeat_until_date'),
+            'times'      => (string) trans('firefly.repeat_times'),
         ];
         $weekendResponses  = [
-            RecurrenceRepetition::WEEKEND_DO_NOTHING    => (string)trans('firefly.do_nothing'),
-            RecurrenceRepetition::WEEKEND_SKIP_CREATION => (string)trans('firefly.skip_transaction'),
-            RecurrenceRepetition::WEEKEND_TO_FRIDAY     => (string)trans('firefly.jump_to_friday'),
-            RecurrenceRepetition::WEEKEND_TO_MONDAY     => (string)trans('firefly.jump_to_monday'),
+            RecurrenceRepetitionWeekend::WEEKEND_DO_NOTHING->value    => (string) trans('firefly.do_nothing'),
+            RecurrenceRepetitionWeekend::WEEKEND_SKIP_CREATION->value => (string) trans('firefly.skip_transaction'),
+            RecurrenceRepetitionWeekend::WEEKEND_TO_FRIDAY->value     => (string) trans('firefly.jump_to_friday'),
+            RecurrenceRepetitionWeekend::WEEKEND_TO_MONDAY->value     => (string) trans('firefly.jump_to_monday'),
         ];
 
         // fill prefilled with journal info
-        $type              = strtolower($journal->transactionType->type);
+        $type              = strtolower((string) $journal->transactionType->type);
 
         /** @var Transaction $source */
         $source            = $journal->transactions()->where('amount', '<', 0)->first();
@@ -163,7 +161,7 @@ class CreateController extends Controller
         $bill              = null !== $journal->bill ? $journal->bill->id : 0;
         $hasOldInput       = null !== $request->old('_token'); // flash some data
         $preFilled         = [];
-        if (true === $hasOldInput) {
+        if ($hasOldInput) {
             $preFilled = [
                 'title'                     => $request->old('title'),
                 'transaction_description'   => $request->old('description'),
@@ -180,8 +178,8 @@ class CreateController extends Controller
                 'category'                  => $request->old('category'),
                 'budget_id'                 => $request->old('budget_id'),
                 'bill_id'                   => $request->old('bill_id'),
-                'active'                    => (bool)$request->old('active'),
-                'apply_rules'               => (bool)$request->old('apply_rules'),
+                'active'                    => (bool) $request->old('active'),
+                'apply_rules'               => (bool) $request->old('apply_rules'),
             ];
         }
         if (false === $hasOldInput) {
@@ -207,10 +205,7 @@ class CreateController extends Controller
         }
         $request->session()->flash('preFilled', $preFilled);
 
-        return view(
-            'recurring.create',
-            compact('tomorrow', 'oldRepetitionType', 'bills', 'weekendResponses', 'preFilled', 'repetitionEnds', 'defaultCurrency', 'budgets')
-        );
+        return view('recurring.create', ['tomorrow' => $tomorrow, 'oldRepetitionType' => $oldRepetitionType, 'bills' => $bills, 'weekendResponses' => $weekendResponses, 'preFilled' => $preFilled, 'repetitionEnds' => $repetitionEnds, 'budgets' => $budgets]);
     }
 
     /**
@@ -225,7 +220,7 @@ class CreateController extends Controller
         $data     = $request->getAll();
 
         try {
-            $recurrence = $this->recurring->store($data);
+            $recurrence = $this->repository->store($data);
         } catch (FireflyException $e) {
             session()->flash('error', $e->getMessage());
 
@@ -233,8 +228,8 @@ class CreateController extends Controller
         }
         Log::channel('audit')->info('Stored new recurrence.', $data);
 
-        $request->session()->flash('success', (string)trans('firefly.stored_new_recurrence', ['title' => $recurrence->title]));
-        app('preferences')->mark();
+        $request->session()->flash('success', (string) trans('firefly.stored_new_recurrence', ['title' => $recurrence->title]));
+        Preferences::mark();
 
         // store attachment(s):
         /** @var null|array $files */
@@ -244,7 +239,7 @@ class CreateController extends Controller
         }
         if (null !== $files && auth()->user()->hasRole('demo')) {
             Log::channel('audit')->warning(sprintf('The demo user is trying to upload attachments in %s.', __METHOD__));
-            session()->flash('info', (string)trans('firefly.no_att_demo_user'));
+            session()->flash('info', (string) trans('firefly.no_att_demo_user'));
         }
 
         if (count($this->attachments->getMessages()->get('attachments')) > 0) {
@@ -252,7 +247,7 @@ class CreateController extends Controller
         }
 
         $redirect = redirect($this->getPreviousUrl('recurring.create.url'));
-        if (1 === (int)$request->get('create_another')) {
+        if (1 === (int) $request->get('create_another')) {
             // set value so create routine will not overwrite URL:
             $request->session()->put('recurring.create.fromStore', true);
 

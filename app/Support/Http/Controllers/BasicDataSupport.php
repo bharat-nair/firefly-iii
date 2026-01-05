@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BasicDataSupport.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -37,7 +38,9 @@ trait BasicDataSupport
      */
     protected function isInArray(array $array, int $entryId)
     {
-        return $array[$entryId] ?? '0';
+        $key = $this->convertToPrimary ? 'pc_balance' : 'balance';
+
+        return $array[$entryId][$key] ?? '0';
     }
 
     /**

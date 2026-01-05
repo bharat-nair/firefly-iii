@@ -1,4 +1,5 @@
 <?php
+
 /*
  * TrustHosts.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -24,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Middleware;
 
 use Illuminate\Http\Middleware\TrustHosts as Middleware;
+use Override;
 
 class TrustHosts extends Middleware
 {
@@ -32,6 +34,7 @@ class TrustHosts extends Middleware
      *
      * @return array<int, null|string>
      */
+    #[Override]
     public function hosts(): array
     {
         return [

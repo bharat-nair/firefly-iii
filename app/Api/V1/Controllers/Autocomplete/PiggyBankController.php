@@ -1,4 +1,5 @@
 <?php
+
 /**
  * PiggyBankController.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,12 +24,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
+use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteApiRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\PiggyBank;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
-use FireflyIII\User;
+use FireflyIII\Support\Facades\Amount;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -38,6 +42,7 @@ class PiggyBankController extends Controller
 {
     private AccountRepositoryInterface   $accountRepository;
     private PiggyBankRepositoryInterface $piggyRepository;
+    protected array $acceptedRoles = [UserRoleEnum::READ_PIGGY_BANKS];
 
     /**
      * PiggyBankController constructor.
@@ -46,85 +51,75 @@ class PiggyBankController extends Controller
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
-                /** @var User $user */
-                $user                    = auth()->user();
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
                 $this->piggyRepository   = app(PiggyBankRepositoryInterface::class);
                 $this->accountRepository = app(AccountRepositoryInterface::class);
-                $this->piggyRepository->setUser($user);
-                $this->accountRepository->setUser($user);
+                $this->piggyRepository->setUser($this->user);
+                $this->piggyRepository->setUserGroup($this->userGroup);
+                $this->accountRepository->setUser($this->user);
+                $this->accountRepository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
         );
     }
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getPiggiesAC
-     */
-    public function piggyBanks(AutocompleteRequest $request): JsonResponse
+    public function piggyBanks(AutocompleteApiRequest $request): JsonResponse
     {
-        $data            = $request->getData();
-        $piggies         = $this->piggyRepository->searchPiggyBank($data['query'], $this->parameters->get('limit'));
-        $defaultCurrency = app('amount')->getDefaultCurrency();
-        $response        = [];
+        $piggies  = $this->piggyRepository->searchPiggyBank($request->attributes->get('query'), $request->attributes->get('limit'));
+        $response = [];
 
         /** @var PiggyBank $piggy */
         foreach ($piggies as $piggy) {
-            $currency    = $this->accountRepository->getAccountCurrency($piggy->account) ?? $defaultCurrency;
+            $currency    = $piggy->transactionCurrency;
             $objectGroup = $piggy->objectGroups()->first();
             $response[]  = [
-                'id'                      => (string)$piggy->id,
+                'id'                      => (string) $piggy->id,
                 'name'                    => $piggy->name,
-                'currency_id'             => (string)$currency->id,
+                'currency_id'             => (string) $currency->id,
                 'currency_name'           => $currency->name,
                 'currency_code'           => $currency->code,
                 'currency_symbol'         => $currency->symbol,
                 'currency_decimal_places' => $currency->decimal_places,
-                'object_group_id'         => null === $objectGroup ? null : (string)$objectGroup->id,
+                'object_group_id'         => null === $objectGroup ? null : (string) $objectGroup->id,
                 'object_group_title'      => $objectGroup?->title,
             ];
         }
 
-        return response()->json($response);
+        return response()->api($response);
     }
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getPiggiesBalanceAC
-     */
-    public function piggyBanksWithBalance(AutocompleteRequest $request): JsonResponse
+    public function piggyBanksWithBalance(AutocompleteApiRequest $request): JsonResponse
     {
-        $data            = $request->getData();
-        $piggies         = $this->piggyRepository->searchPiggyBank($data['query'], $this->parameters->get('limit'));
-        $defaultCurrency = app('amount')->getDefaultCurrency();
-        $response        = [];
+        $piggies  = $this->piggyRepository->searchPiggyBank($request->attributes->get('query'), $request->attributes->get('limit'));
+        $response = [];
 
         /** @var PiggyBank $piggy */
         foreach ($piggies as $piggy) {
-            $currency      = $this->accountRepository->getAccountCurrency($piggy->account) ?? $defaultCurrency;
-            $currentAmount = $this->piggyRepository->getRepetition($piggy)->currentamount ?? '0';
+            /** @var TransactionCurrency $currency */
+            $currency      = $piggy->transactionCurrency;
+            $currentAmount = $this->piggyRepository->getCurrentAmount($piggy);
             $objectGroup   = $piggy->objectGroups()->first();
             $response[]    = [
-                'id'                      => (string)$piggy->id,
+                'id'                      => (string) $piggy->id,
                 'name'                    => $piggy->name,
                 'name_with_balance'       => sprintf(
                     '%s (%s / %s)',
                     $piggy->name,
-                    app('amount')->formatAnything($currency, $currentAmount, false),
-                    app('amount')->formatAnything($currency, $piggy->targetamount, false),
+                    Amount::formatAnything($currency, $currentAmount, false),
+                    Amount::formatAnything($currency, $piggy->target_amount, false),
                 ),
-                'currency_id'             => (string)$currency->id,
+                'currency_id'             => (string) $currency->id,
                 'currency_name'           => $currency->name,
                 'currency_code'           => $currency->code,
                 'currency_symbol'         => $currency->symbol,
                 'currency_decimal_places' => $currency->decimal_places,
-                'object_group_id'         => null === $objectGroup ? null : (string)$objectGroup->id,
+                'object_group_id'         => null === $objectGroup ? null : (string) $objectGroup->id,
                 'object_group_title'      => $objectGroup?->title,
             ];
         }
 
-        return response()->json($response);
+        return response()->api($response);
     }
 }

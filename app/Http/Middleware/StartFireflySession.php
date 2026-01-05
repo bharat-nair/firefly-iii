@@ -26,6 +26,7 @@ namespace FireflyIII\Http\Middleware;
 use Illuminate\Contracts\Session\Session;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
+use Override;
 
 /**
  * Class StartFireflySession.
@@ -37,6 +38,7 @@ class StartFireflySession extends StartSession
      *
      * @param Session $session
      */
+    #[Override]
     protected function storeCurrentUrl(Request $request, $session): void
     {
         $url     = $request->fullUrl();

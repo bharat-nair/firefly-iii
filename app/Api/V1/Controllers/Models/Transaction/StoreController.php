@@ -1,4 +1,5 @@
 <?php
+
 /*
  * StoreController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,19 +24,24 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Models\Transaction;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\Transaction\StoreRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Events\StoredTransactionGroup;
 use FireflyIII\Exceptions\DuplicateTransactionException;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface;
 use FireflyIII\Rules\IsDuplicateTransaction;
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Support\Http\Api\TransactionFilter;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use League\Fractal\Resource\Item;
 
@@ -46,6 +52,7 @@ class StoreController extends Controller
 {
     use TransactionFilter;
 
+    protected array $acceptedRoles = [UserRoleEnum::MANAGE_TRANSACTIONS];
     private TransactionGroupRepositoryInterface $groupRepository;
 
     /**
@@ -55,12 +62,14 @@ class StoreController extends Controller
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
+            function (Request $request, $next) {
                 /** @var User $admin */
                 $admin                 = auth()->user();
+                $userGroup             = $this->validateUserGroup($request);
 
                 $this->groupRepository = app(TransactionGroupRepositoryInterface::class);
                 $this->groupRepository->setUser($admin);
+                $this->groupRepository->setUserGroup($userGroup);
 
                 return $next($request);
             }
@@ -77,62 +86,65 @@ class StoreController extends Controller
      */
     public function store(StoreRequest $request): JsonResponse
     {
-        app('log')->debug('Now in API StoreController::store()');
-        $data          = $request->getAll();
-        $data['user']  = auth()->user()->id;
+        Log::debug('Now in API StoreController::store()');
+        $data               = $request->getAll();
+        $data['user']       = auth()->user();
+        $data['user_group'] = $this->userGroup;
 
-        Log::channel('audit')
-            ->info('Store new transaction over API.', $data)
-        ;
+
+        Log::channel('audit')->info('Store new transaction over API.', $data);
 
         try {
             $transactionGroup = $this->groupRepository->store($data);
-        } catch (DuplicateTransactionException $e) { // @phpstan-ignore-line
-            app('log')->warning('Caught a duplicate transaction. Return error message.');
-            $validator = \Validator::make(
-                ['transactions' => [['description' => $e->getMessage()]]],
-                ['transactions.0.description' => new IsDuplicateTransaction()]
-            );
+        } catch (DuplicateTransactionException $e) {
+            Log::warning('Caught a duplicate transaction. Return error message.');
+            $validator = Validator::make(['transactions' => [['description' => $e->getMessage()]]], ['transactions.0.description' => new IsDuplicateTransaction()]);
 
-            throw new ValidationException($validator); // @phpstan-ignore-line
-        } catch (FireflyException $e) { // @phpstan-ignore-line
-            app('log')->warning('Caught an exception. Return error message.');
-            app('log')->error($e->getMessage());
+            throw new ValidationException($validator);
+        } catch (FireflyException $e) {
+            Log::warning('Caught an exception. Return error message.');
+            Log::error($e->getMessage());
             $message   = sprintf('Internal exception: %s', $e->getMessage());
-            $validator = \Validator::make(['transactions' => [['description' => $message]]], ['transactions.0.description' => new IsDuplicateTransaction()]);
+            $validator = Validator::make(['transactions' => [['description' => $message]]], ['transactions.0.description' => new IsDuplicateTransaction()]);
 
-            throw new ValidationException($validator); // @phpstan-ignore-line
+            throw new ValidationException($validator);
         }
-        app('preferences')->mark();
-        $applyRules    = $data['apply_rules'] ?? true;
-        $fireWebhooks  = $data['fire_webhooks'] ?? true;
+        Preferences::mark();
+        $applyRules         = $data['apply_rules'] ?? true;
+        $fireWebhooks       = $data['fire_webhooks'] ?? true;
         event(new StoredTransactionGroup($transactionGroup, $applyRules, $fireWebhooks));
 
-        $manager       = $this->getManager();
+        $manager            = $this->getManager();
 
         /** @var User $admin */
-        $admin         = auth()->user();
+        $admin              = auth()->user();
 
         // use new group collector:
         /** @var GroupCollectorInterface $collector */
-        $collector     = app(GroupCollectorInterface::class);
+        $collector          = app(GroupCollectorInterface::class);
         $collector
             ->setUser($admin)
+            ->setUserGroup($this->userGroup)
             // filter on transaction group.
             ->setTransactionGroup($transactionGroup)
             // all info needed for the API:
             ->withAPIInformation()
         ;
 
-        $selectedGroup = $collector->getGroups()->first();
+        $selectedGroup      = $collector->getGroups()->first();
         if (null === $selectedGroup) {
             throw new FireflyException('200032: Cannot find transaction. Possibly, a rule deleted this transaction after its creation.');
         }
 
+        // enrich
+        $enrichment         = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $selectedGroup      = $enrichment->enrichSingle($selectedGroup);
+
         /** @var TransactionGroupTransformer $transformer */
-        $transformer   = app(TransactionGroupTransformer::class);
+        $transformer        = app(TransactionGroupTransformer::class);
         $transformer->setParameters($this->parameters);
-        $resource      = new Item($selectedGroup, $transformer, 'transactions');
+        $resource           = new Item($selectedGroup, $transformer, 'transactions');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

@@ -25,12 +25,13 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\User;
 
 use FireflyIII\Models\Bill;
-use FireflyIII\Support\Notifications\UrlValidator;
+use FireflyIII\Notifications\ReturnsAvailableChannels;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\Pushover\PushoverMessage;
 
 /**
  * Class BillReminder
@@ -39,105 +40,80 @@ class BillReminder extends Notification
 {
     use Queueable;
 
-    private Bill   $bill;
-    private int    $diff;
-    private string $field;
+    public function __construct(private Bill $bill, private string $field, private int $diff) {}
 
     /**
-     * Create a new notification instance.
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function __construct(Bill $bill, string $field, int $diff)
-    {
-        $this->bill  = $bill;
-        $this->field = $field;
-        $this->diff  = $diff;
-    }
-
-    /**
-     * Get the array representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function toArray($notifiable)
+    public function toArray(User $notifiable): array
     {
         return [
         ];
     }
 
     /**
-     * Get the mail representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return MailMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toMail($notifiable)
+    public function toMail(User $notifiable): MailMessage
     {
-        $subject = (string)trans(sprintf('email.bill_warning_subject_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
+        return new MailMessage()
+            ->markdown('emails.bill-warning', ['field' => $this->field, 'diff' => $this->diff, 'bill' => $this->bill])
+            ->subject($this->getSubject())
+        ;
+    }
+
+    private function getSubject(): string
+    {
         if (0 === $this->diff) {
-            $subject = (string)trans(sprintf('email.bill_warning_subject_now_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
+            return (string) trans(sprintf('email.bill_warning_subject_now_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
         }
 
-        return (new MailMessage())
-            ->markdown('emails.bill-warning', ['field' => $this->field, 'diff' => $this->diff, 'bill' => $this->bill])
-            ->subject($subject)
+        return (string) trans(sprintf('email.bill_warning_subject_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
+    }
+
+    //    public function toNtfy(User $notifiable): Message
+    //    {
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
+    //        $message  = new Message();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->title($this->getSubject());
+    //        $message->body((string) trans('email.bill_warning_please_action'));
+    //
+    //        return $message;
+    //    }
+
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     */
+    public function toPushover(User $notifiable): PushoverMessage
+    {
+        return PushoverMessage::create((string) trans('email.bill_warning_please_action'))
+            ->title($this->getSubject())
         ;
     }
 
     /**
-     * Get the Slack representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return SlackMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toSlack($notifiable)
+    public function toSlack(User $notifiable): SlackMessage
     {
-        $message = (string)trans(sprintf('email.bill_warning_subject_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
-        if (0 === $this->diff) {
-            $message = (string)trans(sprintf('email.bill_warning_subject_now_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
-        }
-        $bill    = $this->bill;
-        $url     = route('bills.show', [$bill->id]);
+        $bill = $this->bill;
+        $url  = route('bills.show', [$bill->id]);
 
-        return (new SlackMessage())
+        return new SlackMessage()
             ->warning()
             ->attachment(static function ($attachment) use ($bill, $url): void {
-                $attachment->title((string)trans('firefly.visit_bill', ['name' => $bill->name]), $url);
+                $attachment->title((string) trans('firefly.visit_bill', ['name' => $bill->name]), $url);
             })
-            ->content($message)
+            ->content($this->getSubject())
         ;
     }
 
     /**
-     * Get the notification's delivery channels.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function via($notifiable)
+    public function via(User $notifiable): array
     {
-        /** @var null|User $user */
-        $user     = auth()->user();
-        $slackUrl = null === $user ? '' : app('preferences')->getForUser(auth()->user(), 'slack_webhook_url', '')->data;
-        if (is_array($slackUrl)) {
-            $slackUrl = '';
-        }
-        if (UrlValidator::isValidWebhookURL((string)$slackUrl)) {
-            return ['mail', 'slack'];
-        }
-
-        return ['mail'];
+        return ReturnsAvailableChannels::returnChannels('user', $notifiable);
     }
 }

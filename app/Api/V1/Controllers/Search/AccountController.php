@@ -26,12 +26,15 @@ namespace FireflyIII\Api\V1\Controllers\Search;
 
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Support\Http\Api\AccountFilter;
+use FireflyIII\Support\JsonApi\Enrichments\AccountEnrichment;
 use FireflyIII\Support\Search\AccountSearch;
 use FireflyIII\Transformers\AccountTransformer;
+use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
 
@@ -42,18 +45,17 @@ class AccountController extends Controller
 {
     use AccountFilter;
 
-    private array $validFields;
+    private array $validFields = [
+        AccountSearch::SEARCH_ALL,
+        AccountSearch::SEARCH_ID,
+        AccountSearch::SEARCH_NAME,
+        AccountSearch::SEARCH_IBAN,
+        AccountSearch::SEARCH_NUMBER,
+    ];
 
     public function __construct()
     {
         parent::__construct();
-        $this->validFields = [
-            AccountSearch::SEARCH_ALL,
-            AccountSearch::SEARCH_ID,
-            AccountSearch::SEARCH_NAME,
-            AccountSearch::SEARCH_IBAN,
-            AccountSearch::SEARCH_NUMBER,
-        ];
     }
 
     /**
@@ -62,14 +64,14 @@ class AccountController extends Controller
      */
     public function search(Request $request): JsonResponse|Response
     {
-        app('log')->debug('Now in account search()');
         $manager     = $this->getManager();
-        $query       = trim((string)$request->get('query'));
-        $field       = trim((string)$request->get('field'));
+        $query       = trim((string) $request->get('query'));
+        $field       = trim((string) $request->get('field'));
         $type        = $request->get('type') ?? 'all';
         if ('' === $query || !in_array($field, $this->validFields, true)) {
             return response(null, 422);
         }
+        Log::debug(sprintf('Now in account search("%s", "%s")', $field, $query));
         $types       = $this->mapAccountTypes($type);
 
         /** @var AccountSearch $search */
@@ -80,6 +82,14 @@ class AccountController extends Controller
         $search->setQuery($query);
 
         $accounts    = $search->search();
+
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new AccountEnrichment();
+        $enrichment->setDate($this->parameters->get('date'));
+        $enrichment->setUser($admin);
+        $accounts    = $enrichment->enrich($accounts);
 
         /** @var AccountTransformer $transformer */
         $transformer = app(AccountTransformer::class);

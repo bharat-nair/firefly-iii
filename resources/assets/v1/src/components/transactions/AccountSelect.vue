@@ -36,7 +36,6 @@
             class="form-control"
             data-role="input"
             type="text"
-            v-on:keypress="handleEnter"
             v-on:submit.prevent>
         <span class="input-group-btn">
             <button
@@ -239,12 +238,6 @@ export default {
           this.name = '';
           // some event?
           this.$emit('clear:value')
-        },
-        handleEnter: function (e) {
-          // TODO feels sloppy. Can be removed.
-          if (e.keyCode === 13) {
-            //e.preventDefault();
-          }
         }
       }
 }

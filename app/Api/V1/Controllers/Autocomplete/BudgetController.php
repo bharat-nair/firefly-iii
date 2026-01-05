@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BudgetController.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,11 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
+use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteApiRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Budget;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
-use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -36,6 +38,7 @@ use Illuminate\Http\JsonResponse;
 class BudgetController extends Controller
 {
     private BudgetRepositoryInterface $repository;
+    protected array $acceptedRoles = [UserRoleEnum::READ_BUDGETS];
 
     /**
      * BudgetController constructor.
@@ -44,11 +47,11 @@ class BudgetController extends Controller
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
-                /** @var User $user */
-                $user             = auth()->user();
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
                 $this->repository = app(BudgetRepositoryInterface::class);
-                $this->repository->setUser($user);
+                $this->repository->setUser($this->user);
+                $this->repository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
@@ -59,19 +62,17 @@ class BudgetController extends Controller
      * Documentation for this endpoint is at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getBudgetsAC
      */
-    public function budgets(AutocompleteRequest $request): JsonResponse
+    public function budgets(AutocompleteApiRequest $request): JsonResponse
     {
-        $data     = $request->getData();
-        $result   = $this->repository->searchBudget($data['query'], $this->parameters->get('limit'));
+        $result   = $this->repository->searchBudget($request->attributes->get('query'), $request->attributes->get('limit'));
         $filtered = $result->map(
-            static function (Budget $item) {
-                return [
-                    'id'   => (string)$item->id,
-                    'name' => $item->name,
-                ];
-            }
+            static fn (Budget $item): array => [
+                'id'     => (string) $item->id,
+                'name'   => $item->name,
+                'active' => $item->active,
+            ]
         );
 
-        return response()->json($filtered);
+        return response()->api($filtered->toArray());
     }
 }

@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Twig;
 
+use Illuminate\Contracts\Translation\Translator;
+use Override;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
@@ -32,19 +34,19 @@ use Twig\TwigFunction;
  */
 class Translation extends AbstractExtension
 {
+    #[Override]
     public function getFilters(): array
     {
         return [
             new TwigFilter(
                 '_',
-                static function ($name) {
-                    return (string)trans(sprintf('firefly.%s', $name));
-                },
+                static fn (string $name) => (string)trans(sprintf('firefly.%s', $name)),
                 ['is_safe' => ['html']]
             ),
         ];
     }
 
+    #[Override]
     public function getFunctions(): array
     {
         return [
@@ -57,7 +59,7 @@ class Translation extends AbstractExtension
     {
         return new TwigFunction(
             'journalLinkTranslation',
-            static function (string $direction, string $original) {
+            static function (string $direction, string $original): array|string|Translator {
                 $key         = sprintf('firefly.%s_%s', $original, $direction);
                 $translation = trans($key);
                 if ($key === $translation) {
@@ -74,7 +76,7 @@ class Translation extends AbstractExtension
     {
         return new TwigFunction(
             '__',
-            static function (string $key) {
+            static function (string $key): array|string|Translator {
                 $translation = trans($key);
                 if ($key === $translation) {
                     return $key;

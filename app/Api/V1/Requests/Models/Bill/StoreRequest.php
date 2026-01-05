@@ -24,13 +24,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Bill;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
+use TypeError;
+use ValueError;
 
 /**
  * Class StoreRequest
@@ -45,7 +47,7 @@ class StoreRequest extends FormRequest
      */
     public function getAll(): array
     {
-        app('log')->debug('Raw fields in Bill StoreRequest', $this->all());
+        Log::debug('Raw fields in Bill StoreRequest', $this->all());
         $fields = [
             'name'               => ['name', 'convertString'],
             'amount_min'         => ['amount_min', 'convertString'],
@@ -78,13 +80,13 @@ class StoreRequest extends FormRequest
             'amount_max'     => ['required', new IsValidPositiveAmount()],
             'currency_id'    => 'numeric|exists:transaction_currencies,id',
             'currency_code'  => 'min:3|max:51|exists:transaction_currencies,code',
-            'date'           => 'date|required',
-            'end_date'       => 'date|after:date',
-            'extension_date' => 'date|after:date',
+            'date'           => 'date|required|after:1970-01-02|before:2038-01-17',
+            'end_date'       => 'nullable|date|after:date|after:1970-01-02|before:2038-01-17',
+            'extension_date' => 'nullable|date|after:date|after:1970-01-02|before:2038-01-17',
             'repeat_freq'    => 'in:weekly,monthly,quarterly,half-year,yearly|required',
             'skip'           => 'min:0|max:31|numeric',
             'active'         => [new IsBoolean()],
-            'notes'          => 'min:1|max:32768',
+            'notes'          => 'nullable|min:1|max:32768',
         ];
     }
 
@@ -95,17 +97,40 @@ class StoreRequest extends FormRequest
     {
         $validator->after(
             static function (Validator $validator): void {
-                $data = $validator->getData();
-                $min  = (string)($data['amount_min'] ?? '0');
-                $max  = (string)($data['amount_max'] ?? '0');
+                $data   = $validator->getData();
+                $min    = $data['amount_min'] ?? '0';
+                $max    = $data['amount_max'] ?? '0';
 
-                if (1 === bccomp($min, $max)) {
-                    $validator->errors()->add('amount_min', (string)trans('validation.amount_min_over_max'));
+                if (is_array($min) || is_array($max)) {
+                    $validator->errors()->add('amount_min', (string) trans('validation.generic_invalid'));
+                    $validator->errors()->add('amount_max', (string) trans('validation.generic_invalid'));
+                    $min = '0';
+                    $max = '0';
+                }
+                $result = false;
+
+                try {
+                    $result = bccomp($min, $max);
+                } catch (ValueError $e) {
+                    Log::error($e->getMessage());
+                    $validator->errors()->add('amount_min', (string) trans('validation.generic_invalid'));
+                    $validator->errors()->add('amount_max', (string) trans('validation.generic_invalid'));
+                }
+
+                if (1 === $result) {
+                    $validator->errors()->add('amount_min', (string) trans('validation.amount_min_over_max'));
                 }
             }
         );
-        if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+        $failed = false;
+
+        try {
+            $failed = $validator->fails();
+        } catch (TypeError $e) {
+            Log::error($e->getMessage());
+        }
+        if ($failed) {
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

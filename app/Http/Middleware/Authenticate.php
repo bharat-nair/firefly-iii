@@ -24,11 +24,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Middleware;
 
+use Illuminate\Support\Facades\Log;
+use Closure;
 use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Exceptions\Handler;
 use FireflyIII\User;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Factory as Auth;
 use Illuminate\Http\Request;
+use League\OAuth2\Server\Exception\OAuthServerException;
 
 /**
  * Class Authenticate
@@ -36,17 +40,14 @@ use Illuminate\Http\Request;
 class Authenticate
 {
     /**
-     * The authentication factory instance.
-     */
-    protected Auth $auth;
-
-    /**
      * Create a new middleware instance.
      */
-    public function __construct(Auth $auth)
-    {
-        $this->auth = $auth;
-    }
+    public function __construct(
+        /**
+         * The authentication factory instance.
+         */
+        protected Auth $auth
+    ) {}
 
     /**
      * Handle an incoming request.
@@ -59,7 +60,7 @@ class Authenticate
      * @throws FireflyException
      * @throws AuthenticationException
      */
-    public function handle($request, \Closure $next, ...$guards)
+    public function handle($request, Closure $next, ...$guards)
     {
         $this->authenticate($request, $guards);
 
@@ -76,7 +77,7 @@ class Authenticate
      * @throws FireflyException
      * @throws AuthenticationException
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     protected function authenticate($request, array $guards)
     {
@@ -86,6 +87,7 @@ class Authenticate
             if ($this->auth->check()) {
                 // do an extra check on user object.
                 /** @noinspection PhpUndefinedMethodInspection */
+
                 /** @var User $user */
                 $user = $this->auth->authenticate();
                 $this->validateBlockedUser($user, $guards);
@@ -109,7 +111,14 @@ class Authenticate
             }
         }
 
-        throw new AuthenticationException('Unauthenticated.', $guards);
+        // this is a massive hack, but if the handler has the oauth exception
+        // at this point we can report its error instead of a generic one.
+        $message = 'Unauthenticated.';
+        if (Handler::$lastError instanceof OAuthServerException) {
+            $message = Handler::$lastError->getHint();
+        }
+
+        throw new AuthenticationException($message, $guards);
     }
 
     /**
@@ -117,23 +126,22 @@ class Authenticate
      */
     private function validateBlockedUser(?User $user, array $guards): void
     {
-        if (null === $user) {
-            app('log')->warning('User is null, throw exception?');
+        if (!$user instanceof User) {
+            Log::warning('User is null, throw exception?');
         }
-        if (null !== $user) {
-            // app('log')->debug(get_class($user));
-            if (1 === (int)$user->blocked) {
-                $message = (string)trans('firefly.block_account_logout');
-                if ('email_changed' === $user->blocked_code) {
-                    $message = (string)trans('firefly.email_changed_logout');
-                }
-                app('log')->warning('User is blocked, cannot use authentication method.');
-                app('session')->flash('logoutMessage', $message);
-                // @noinspection PhpUndefinedMethodInspection
-                $this->auth->logout(); // @phpstan-ignore-line (thinks function is undefined)
-
-                throw new AuthenticationException('Blocked account.', $guards);
+        // \Illuminate\Support\Facades\Log::debug(get_class($user));
+        if ($user instanceof User && 1 === (int) $user->blocked) {
+            $message = (string) trans('firefly.block_account_logout');
+            if ('email_changed' === $user->blocked_code) {
+                $message = (string) trans('firefly.email_changed_logout');
             }
+            Log::warning('User is blocked, cannot use authentication method.');
+            app('session')->flash('logoutMessage', $message);
+            // @noinspection PhpUndefinedMethodInspection
+            $this->auth->logout();
+
+            // @phpstan-ignore-line (thinks function is undefined)
+            throw new AuthenticationException('Blocked account.', $guards);
         }
     }
 }

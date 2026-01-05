@@ -26,6 +26,7 @@ namespace FireflyIII\Http\Controllers\Auth;
 use FireflyIII\Events\RegisteredUser;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
+use FireflyIII\Notifications\Notifiables\OwnerNotifiable;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Support\Http\Controllers\CreateStuff;
 use FireflyIII\User;
@@ -35,6 +36,7 @@ use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Psr\Container\ContainerExceptionInterface;
@@ -80,10 +82,10 @@ class RegisterController extends Controller
      * @throws FireflyException
      * @throws ValidationException
      */
-    public function register(Request $request)
+    public function register(Request $request): Redirector|RedirectResponse
     {
         $allowRegistration = $this->allowedToRegister();
-        $inviteCode        = (string)$request->get('invite_code');
+        $inviteCode        = (string) $request->get('invite_code');
         $repository        = app(UserRepositoryInterface::class);
         $validCode         = $repository->validateInviteCode($inviteCode);
 
@@ -93,12 +95,13 @@ class RegisterController extends Controller
 
         $this->validator($request->all())->validate();
         $user              = $this->createUser($request->all());
-        app('log')->info(sprintf('Registered new user %s', $user->email));
-        event(new RegisteredUser($user));
+        Log::info(sprintf('Registered new user %s', $user->email));
+        $owner             = new OwnerNotifiable();
+        event(new RegisteredUser($owner, $user));
 
         $this->guard()->login($user);
 
-        session()->flash('success', (string)trans('firefly.registered'));
+        session()->flash('success', (string) trans('firefly.registered'));
 
         $this->registered($request, $user);
 
@@ -119,7 +122,7 @@ class RegisterController extends Controller
 
         try {
             $singleUserMode = app('fireflyconfig')->get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
-        } catch (ContainerExceptionInterface|NotFoundExceptionInterface $e) {
+        } catch (ContainerExceptionInterface|NotFoundExceptionInterface) {
             $singleUserMode = true;
         }
         $userCount         = User::count();
@@ -128,7 +131,7 @@ class RegisterController extends Controller
             $allowRegistration = false;
         }
         if ('web' !== $guard) {
-            $allowRegistration = false;
+            return false;
         }
 
         return $allowRegistration;
@@ -139,31 +142,33 @@ class RegisterController extends Controller
      *
      * @return Factory|View
      *
+     * @throws ContainerExceptionInterface
      * @throws FireflyException
+     * @throws NotFoundExceptionInterface
      */
-    public function showInviteForm(Request $request, string $code)
+    public function showInviteForm(Request $request, string $code): Factory|\Illuminate\Contracts\View\View
     {
         $isDemoSite        = app('fireflyconfig')->get('is_demo_site', config('firefly.configuration.is_demo_site'))->data;
-        $pageTitle         = (string)trans('firefly.register_page_title');
+        $pageTitle         = (string) trans('firefly.register_page_title');
         $repository        = app(UserRepositoryInterface::class);
         $allowRegistration = $this->allowedToRegister();
         $inviteCode        = $code;
         $validCode         = $repository->validateInviteCode($inviteCode);
 
-        if (true === $allowRegistration) {
+        if ($allowRegistration) {
             $message = 'You do not need an invite code on this installation.';
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
         if (false === $validCode) {
             $message = 'Invalid code.';
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
 
         $email             = $request->old('email');
 
-        return view('auth.register', compact('isDemoSite', 'email', 'pageTitle', 'inviteCode'));
+        return view('auth.register', ['isDemoSite' => $isDemoSite, 'email' => $email, 'pageTitle' => $pageTitle, 'inviteCode' => $inviteCode]);
     }
 
     /**
@@ -171,22 +176,24 @@ class RegisterController extends Controller
      *
      * @return Factory|View
      *
+     * @throws ContainerExceptionInterface
      * @throws FireflyException
+     * @throws NotFoundExceptionInterface
      */
-    public function showRegistrationForm(Request $request)
+    public function showRegistrationForm(?Request $request = null): Factory|\Illuminate\Contracts\View\View
     {
         $isDemoSite        = app('fireflyconfig')->get('is_demo_site', config('firefly.configuration.is_demo_site'))->data;
-        $pageTitle         = (string)trans('firefly.register_page_title');
+        $pageTitle         = (string) trans('firefly.register_page_title');
         $allowRegistration = $this->allowedToRegister();
 
         if (false === $allowRegistration) {
             $message = 'Registration is currently not available. If you are the administrator, you can enable this in the administration.';
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
 
-        $email             = $request->old('email');
+        $email             = $request?->old('email');
 
-        return view('auth.register', compact('isDemoSite', 'email', 'pageTitle'));
+        return view('auth.register', ['isDemoSite' => $isDemoSite, 'email' => $email, 'pageTitle' => $pageTitle]);
     }
 }

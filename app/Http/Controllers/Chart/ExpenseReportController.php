@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ExpenseReportController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Chart;
 
+use FireflyIII\Support\Facades\Navigation;
 use Carbon\Carbon;
 use FireflyIII\Generator\Chart\Basic\GeneratorInterface;
 use FireflyIII\Http\Controllers\Controller;
@@ -68,7 +70,7 @@ class ExpenseReportController extends Controller
      *
      * TODO this chart is not multi currency aware.
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function mainChart(Collection $accounts, Collection $expense, Carbon $start, Carbon $end): JsonResponse
     {
@@ -82,8 +84,8 @@ class ExpenseReportController extends Controller
             return response()->json($cache->get());
         }
 
-        $format       = app('navigation')->preferredCarbonLocalizedFormat($start, $end);
-        $function     = app('navigation')->preferredEndOfPeriod($start, $end);
+        $format       = Navigation::preferredCarbonLocalizedFormat($start, $end);
+        $function     = Navigation::preferredEndOfPeriod($start, $end);
         $chartData    = [];
         $currentStart = clone $start;
         $combined     = $this->combineAccounts($expense);
@@ -102,27 +104,27 @@ class ExpenseReportController extends Controller
             /** @var Account $exp */
             $exp                              = $combination->first();
             $chartData[$exp->id.'-in']        = [
-                'label'   => sprintf('%s (%s)', $name, (string)trans('firefly.income')),
+                'label'   => sprintf('%s (%s)', $name, (string) trans('firefly.income')),
                 'type'    => 'bar',
                 'yAxisID' => 'y-axis-0',
                 'entries' => [],
             ];
             $chartData[$exp->id.'-out']       = [
-                'label'   => sprintf('%s (%s)', $name, (string)trans('firefly.expenses')),
+                'label'   => sprintf('%s (%s)', $name, (string) trans('firefly.expenses')),
                 'type'    => 'bar',
                 'yAxisID' => 'y-axis-0',
                 'entries' => [],
             ];
             // total in, total out:
             $chartData[$exp->id.'-total-in']  = [
-                'label'   => sprintf('%s (%s)', $name, (string)trans('firefly.sum_of_income')),
+                'label'   => sprintf('%s (%s)', $name, (string) trans('firefly.sum_of_income')),
                 'type'    => 'line',
                 'fill'    => false,
                 'yAxisID' => 'y-axis-1',
                 'entries' => [],
             ];
             $chartData[$exp->id.'-total-out'] = [
-                'label'   => sprintf('%s (%s)', $name, (string)trans('firefly.sum_of_expenses')),
+                'label'   => sprintf('%s (%s)', $name, (string) trans('firefly.sum_of_expenses')),
                 'type'    => 'line',
                 'fill'    => false,
                 'yAxisID' => 'y-axis-1',

@@ -24,8 +24,10 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Data\Bulk;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Data\Bulk\TransactionRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Services\Internal\Destroy\AccountDestroyService;
 use Illuminate\Http\JsonResponse;
@@ -44,23 +46,23 @@ class TransactionController extends Controller
 {
     private AccountRepositoryInterface $repository;
 
+    protected array $acceptedRoles = [UserRoleEnum::MANAGE_TRANSACTIONS];
+
     public function __construct()
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
                 $this->repository = app(AccountRepositoryInterface::class);
-                $this->repository->setUser(auth()->user());
+                $this->repository->setUserGroup($this->userGroup);
+                $this->repository->setUser($this->user);
 
                 return $next($request);
             }
         );
     }
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/bulkUpdateTransactions
-     */
     public function update(TransactionRequest $request): JsonResponse
     {
         $query  = $request->getAll();
@@ -70,8 +72,8 @@ class TransactionController extends Controller
         // to respond to what is in the $query.
         // this is OK because only one thing can be in the query at the moment.
         if ($this->isUpdateTransactionAccount($params)) {
-            $original    = $this->repository->find((int)$params['where']['account_id']);
-            $destination = $this->repository->find((int)$params['update']['account_id']);
+            $original    = $this->repository->find((int) $params['where']['account_id']);
+            $destination = $this->repository->find((int) $params['update']['account_id']);
 
             /** @var AccountDestroyService $service */
             $service     = app(AccountDestroyService::class);

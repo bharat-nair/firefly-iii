@@ -34,6 +34,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Class ResetPasswordController
@@ -78,7 +80,7 @@ class ResetPasswordController extends Controller
         if ('web' !== config('firefly.authentication_guard')) {
             $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
 
         $rules    = [
@@ -112,25 +114,27 @@ class ResetPasswordController extends Controller
      *
      * If no token is present, display the link request form.
      *
-     * @param null $token
+     * @param null|mixed $token
      *
      * @return Factory|View
      *
      * @throws FireflyException
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
      */
     public function showResetForm(Request $request, $token = null)
     {
         if ('web' !== config('firefly.authentication_guard')) {
             $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
 
         // is allowed to register?
         $singleUserMode    = app('fireflyconfig')->get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
         $userCount         = User::count();
         $allowRegistration = true;
-        $pageTitle         = (string)trans('firefly.reset_pw_page_title');
+        $pageTitle         = (string) trans('firefly.reset_pw_page_title');
         if (true === $singleUserMode && $userCount > 0) {
             $allowRegistration = false;
         }

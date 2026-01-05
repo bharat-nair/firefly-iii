@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OperationsRepositoryInterface.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,14 +25,24 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Budget;
 
 use Carbon\Carbon;
+use Deprecated;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface OperationsRepositoryInterface
+ *
+ * @method setUserGroup(UserGroup $group)
+ * @method getUserGroup()
+ * @method getUser()
+ * @method checkUserGroupAccess(UserRoleEnum $role)
+ * @method setUser(null|Authenticatable|User $user)
+ * @method setUserGroupById(int $userGroupId)
  */
 interface OperationsRepositoryInterface
 {
@@ -41,9 +52,7 @@ interface OperationsRepositoryInterface
      */
     public function budgetedPerDay(Budget $budget): string;
 
-    /**
-     * @deprecated
-     */
+    #[Deprecated]
     public function getBudgetPeriodReport(Collection $budgets, Collection $accounts, Carbon $start, Carbon $end): array;
 
     /**
@@ -53,16 +62,21 @@ interface OperationsRepositoryInterface
      */
     public function listExpenses(Carbon $start, Carbon $end, ?Collection $accounts = null, ?Collection $budgets = null): array;
 
-    public function setUser(null|Authenticatable|User $user): void;
-
     /**
-     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
+     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     public function sumExpenses(
         Carbon               $start,
         Carbon               $end,
         ?Collection          $accounts = null,
         ?Collection          $budgets = null,
-        ?TransactionCurrency $currency = null
+        ?TransactionCurrency $currency = null,
+        bool                 $convertToPrimary = false
     ): array;
+
+    public function sumCollectedExpenses(array $expenses, Carbon $start, Carbon $end, TransactionCurrency $transactionCurrency, bool $convertToPrimary = false): array;
+
+    public function sumCollectedExpensesByBudget(array $expenses, Budget $budget, bool $convertToPrimary = false): array;
+
+    public function collectExpenses(Carbon $start, Carbon $end, ?Collection $accounts = null, ?Collection $budgets = null, ?TransactionCurrency $currency = null): array;
 }

@@ -1,4 +1,5 @@
 <?php
+
 /*
  * PiggyBankObserver.php
  * Copyright (c) 2023 james@firefly-iii.org
@@ -23,8 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Handlers\Observer;
 
+use FireflyIII\Models\Attachment;
 use FireflyIII\Models\PiggyBank;
-use FireflyIII\Models\PiggyBankRepetition;
+use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
+use FireflyIII\Support\Http\Api\ExchangeRateConverter;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class PiggyBankObserver
@@ -33,13 +37,28 @@ class PiggyBankObserver
 {
     public function created(PiggyBank $piggyBank): void
     {
-        app('log')->debug('Observe "created" of a piggy bank.');
-        $repetition                = new PiggyBankRepetition();
-        $repetition->piggyBank()->associate($piggyBank);
-        $repetition->startdate     = $piggyBank->startdate;
-        $repetition->targetdate    = $piggyBank->targetdate;
-        $repetition->currentamount = '0';
-        $repetition->save();
+        Log::debug('Observe "created" of a piggy bank.');
+        $this->updatePrimaryCurrencyAmount($piggyBank);
+    }
+
+    private function updatePrimaryCurrencyAmount(PiggyBank $piggyBank): void
+    {
+        $group                           = $piggyBank->accounts()->first()?->user->userGroup;
+        if (null === $group) {
+            Log::debug(sprintf('No account(s) yet for piggy bank #%d.', $piggyBank->id));
+
+            return;
+        }
+        $userCurrency                    = app('amount')->getPrimaryCurrencyByUserGroup($group);
+        $piggyBank->native_target_amount = null;
+        if ($piggyBank->transactionCurrency->id !== $userCurrency->id) {
+            $converter                       = new ExchangeRateConverter();
+            $converter->setIgnoreSettings(true);
+            $converter->setUserGroup($group);
+            $piggyBank->native_target_amount = $converter->convert($piggyBank->transactionCurrency, $userCurrency, today(), $piggyBank->target_amount);
+        }
+        $piggyBank->saveQuietly();
+        Log::debug('Piggy bank primary currency target amount is updated.');
     }
 
     /**
@@ -47,15 +66,25 @@ class PiggyBankObserver
      */
     public function deleting(PiggyBank $piggyBank): void
     {
-        app('log')->debug('Observe "deleting" of a piggy bank.');
+        Log::debug('Observe "deleting" of a piggy bank.');
 
+        $repository = app(AttachmentRepositoryInterface::class);
+        $repository->setUser($piggyBank->accounts()->first()->user);
+
+        /** @var Attachment $attachment */
         foreach ($piggyBank->attachments()->get() as $attachment) {
-            $attachment->delete();
+            $repository->destroy($attachment);
         }
 
         $piggyBank->piggyBankEvents()->delete();
         $piggyBank->piggyBankRepetitions()->delete();
 
         $piggyBank->notes()->delete();
+    }
+
+    public function updated(PiggyBank $piggyBank): void
+    {
+        Log::debug('Observe "updated" of a piggy bank.');
+        $this->updatePrimaryCurrencyAmount($piggyBank);
     }
 }

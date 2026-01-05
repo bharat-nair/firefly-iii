@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\RuleAction;
@@ -34,31 +35,26 @@ use FireflyIII\Models\TransactionJournal;
  */
 class PrependNotes implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
-        $dbNote       = Note::where('noteable_id', (int)$journal['transaction_journal_id'])
+        $dbNote       = Note::where('noteable_id', (int) $journal['transaction_journal_id'])
             ->where('noteable_type', TransactionJournal::class)
             ->first(['notes.*'])
         ;
         if (null === $dbNote) {
             $dbNote                = new Note();
-            $dbNote->noteable_id   = (int)$journal['transaction_journal_id'];
+            $dbNote->noteable_id   = (int) $journal['transaction_journal_id'];
             $dbNote->noteable_type = TransactionJournal::class;
             $dbNote->text          = '';
         }
         $before       = $dbNote->text;
         $after        = $this->action->getValue($journal);
-        app('log')->debug(sprintf('RuleAction PrependNotes prepended "%s" to "%s".', $after, $dbNote->text));
+        Log::debug(sprintf('RuleAction PrependNotes prepended "%s" to "%s".', $after, $dbNote->text));
         $text         = sprintf('%s%s', $after, $dbNote->text);
         $dbNote->text = $text;
         $dbNote->save();

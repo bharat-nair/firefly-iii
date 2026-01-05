@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ShowController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -24,7 +25,6 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\Tag;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Tag;
 use FireflyIII\Repositories\Tag\TagRepositoryInterface;
 use FireflyIII\Transformers\TagTransformer;
@@ -66,8 +66,6 @@ class ShowController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/tags/listTag
      *
      * List all of them.
-     *
-     * @throws FireflyException
      */
     public function index(): JsonResponse
     {

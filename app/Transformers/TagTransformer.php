@@ -1,4 +1,5 @@
 <?php
+
 /**
  * TagTransformer.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -48,7 +49,7 @@ class TagTransformer extends AbstractTransformer
         if (null !== $location) {
             $latitude  = $location->latitude;
             $longitude = $location->longitude;
-            $zoomLevel = (int)$location->zoom_level;
+            $zoomLevel = (int) $location->zoom_level;
         }
 
         return [

@@ -24,11 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\TransactionCurrency;
 
+use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\CurrencyFormRequest;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
@@ -51,7 +53,7 @@ class EditController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.currencies'));
+                app('view')->share('title', (string) trans('firefly.currencies'));
                 app('view')->share('mainTitleIcon', 'fa-usd');
                 $this->repository     = app(CurrencyRepositoryInterface::class);
                 $this->userRepository = app(UserRepositoryInterface::class);
@@ -66,19 +68,19 @@ class EditController extends Controller
      *
      * @return Factory|Redirector|RedirectResponse|View
      */
-    public function edit(Request $request, TransactionCurrency $currency)
+    public function edit(Request $request, TransactionCurrency $currency): Factory|\Illuminate\Contracts\View\View|Redirector|RedirectResponse
     {
         /** @var User $user */
         $user             = auth()->user();
         if (!$this->userRepository->hasRole($user, 'owner')) {
-            $request->session()->flash('error', (string)trans('firefly.ask_site_owner', ['owner' => e(config('firefly.site_owner'))]));
+            $request->session()->flash('error', (string) trans('firefly.ask_site_owner', ['owner' => e(config('firefly.site_owner'))]));
             Log::channel('audit')->warning(sprintf('Tried to edit currency %s but is not owner.', $currency->code));
 
             return redirect(route('currencies.index'));
         }
 
         $subTitleIcon     = 'fa-pencil';
-        $subTitle         = (string)trans('breadcrumbs.edit_currency', ['name' => $currency->name]);
+        $subTitle         = (string) trans('breadcrumbs.edit_currency', ['name' => $currency->name]);
         $currency->symbol = htmlentities($currency->symbol);
 
         // is currently enabled (for this user?)
@@ -88,7 +90,7 @@ class EditController extends Controller
         // code to handle active-checkboxes
         $hasOldInput      = null !== $request->old('_token');
         $preFilled        = [
-            'enabled' => $hasOldInput ? (bool)$request->old('enabled') : $enabled,
+            'enabled' => $hasOldInput ? (bool) $request->old('enabled') : $enabled,
         ];
 
         $request->session()->flash('preFilled', $preFilled);
@@ -100,15 +102,15 @@ class EditController extends Controller
         }
         $request->session()->forget('currencies.edit.fromUpdate');
 
-        return view('currencies.edit', compact('currency', 'subTitle', 'subTitleIcon'));
+        return view('currencies.edit', ['currency' => $currency, 'subTitle' => $subTitle, 'subTitleIcon' => $subTitleIcon]);
     }
 
     /**
      * Updates a currency.
      *
-     * @return Redirector|RedirectResponse
+     * @throws FireflyException
      */
-    public function update(CurrencyFormRequest $request, TransactionCurrency $currency)
+    public function update(CurrencyFormRequest $request, TransactionCurrency $currency): Redirector|RedirectResponse
     {
         /** @var User $user */
         $user     = auth()->user();
@@ -119,17 +121,17 @@ class EditController extends Controller
         }
 
         if (!$this->userRepository->hasRole($user, 'owner')) {
-            $request->session()->flash('error', (string)trans('firefly.ask_site_owner', ['owner' => e(config('firefly.site_owner'))]));
+            $request->session()->flash('error', (string) trans('firefly.ask_site_owner', ['owner' => e(config('firefly.site_owner'))]));
             Log::channel('audit')->warning('Tried to update (POST) currency without admin rights.', $data);
 
             return redirect(route('currencies.index'));
         }
         $currency = $this->repository->update($currency, $data);
         Log::channel('audit')->info('Updated (POST) currency.', $data);
-        $request->session()->flash('success', (string)trans('firefly.updated_currency', ['name' => $currency->name]));
-        app('preferences')->mark();
+        $request->session()->flash('success', (string) trans('firefly.updated_currency', ['name' => $currency->name]));
+        Preferences::mark();
 
-        if (1 === (int)$request->get('return_to_edit')) {
+        if (1 === (int) $request->get('return_to_edit')) {
             $request->session()->put('currencies.edit.fromUpdate', true);
 
             return redirect(route('currencies.edit', [$currency->id]));

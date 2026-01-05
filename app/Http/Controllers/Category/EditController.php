@@ -1,4 +1,5 @@
 <?php
+
 /**
  * EditController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Category;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\CategoryFormRequest;
@@ -52,7 +54,7 @@ class EditController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.categories'));
+                app('view')->share('title', (string) trans('firefly.categories'));
                 app('view')->share('mainTitleIcon', 'fa-bookmark');
                 $this->repository  = app(CategoryRepositoryInterface::class);
                 $this->attachments = app(AttachmentHelperInterface::class);
@@ -67,9 +69,9 @@ class EditController extends Controller
      *
      * @return Factory|View
      */
-    public function edit(Request $request, Category $category)
+    public function edit(Request $request, Category $category): Factory|\Illuminate\Contracts\View\View
     {
-        $subTitle  = (string)trans('firefly.edit_category', ['name' => $category->name]);
+        $subTitle  = (string) trans('firefly.edit_category', ['name' => $category->name]);
 
         // put previous url in session if not redirect from store (not "return_to_edit").
         if (true !== session('categories.edit.fromUpdate')) {
@@ -81,21 +83,19 @@ class EditController extends Controller
             'notes' => $request->old('notes') ?? $this->repository->getNoteText($category),
         ];
 
-        return view('categories.edit', compact('category', 'subTitle', 'preFilled'));
+        return view('categories.edit', ['category' => $category, 'subTitle' => $subTitle, 'preFilled' => $preFilled]);
     }
 
     /**
      * Update category.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function update(CategoryFormRequest $request, Category $category)
+    public function update(CategoryFormRequest $request, Category $category): Redirector|RedirectResponse
     {
         $data     = $request->getCategoryData();
         $this->repository->update($category, $data);
 
-        $request->session()->flash('success', (string)trans('firefly.updated_category', ['name' => $category->name]));
-        app('preferences')->mark();
+        $request->session()->flash('success', (string) trans('firefly.updated_category', ['name' => $category->name]));
+        Preferences::mark();
 
         // store new attachment(s):
         /** @var null|array $files */
@@ -105,7 +105,7 @@ class EditController extends Controller
         }
         if (null !== $files && auth()->user()->hasRole('demo')) {
             Log::channel('audit')->warning(sprintf('The demo user is trying to upload attachments in %s.', __METHOD__));
-            session()->flash('info', (string)trans('firefly.no_att_demo_user'));
+            session()->flash('info', (string) trans('firefly.no_att_demo_user'));
         }
 
         if (count($this->attachments->getMessages()->get('attachments')) > 0) {
@@ -113,7 +113,7 @@ class EditController extends Controller
         }
         $redirect = redirect($this->getPreviousUrl('categories.edit.url'));
 
-        if (1 === (int)$request->get('return_to_edit')) {
+        if (1 === (int) $request->get('return_to_edit')) {
             $request->session()->put('categories.edit.fromUpdate', true);
 
             $redirect = redirect(route('categories.edit', [$category->id]));

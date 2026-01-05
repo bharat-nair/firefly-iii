@@ -23,7 +23,10 @@ declare(strict_types=1);
 
 namespace FireflyIII\Handlers\Observer;
 
+use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Category;
+use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class CategoryObserver
@@ -32,9 +35,14 @@ class CategoryObserver
 {
     public function deleting(Category $category): void
     {
-        app('log')->debug('Observe "deleting" of a category.');
+        Log::debug('Observe "deleting" of a category.');
+
+        $repository = app(AttachmentRepositoryInterface::class);
+        $repository->setUser($category->user);
+
+        /** @var Attachment $attachment */
         foreach ($category->attachments()->get() as $attachment) {
-            $attachment->delete();
+            $repository->destroy($attachment);
         }
         $category->notes()->delete();
     }

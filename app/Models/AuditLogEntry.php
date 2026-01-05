@@ -30,22 +30,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @mixin IdeHelperAuditLogEntry
- */
 class AuditLogEntry extends Model
 {
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
-
-    protected $casts
-        = [
-            'before'     => 'array',
-            'after'      => 'array',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-        ];
 
     public function auditable(): MorphTo
     {
@@ -60,14 +48,25 @@ class AuditLogEntry extends Model
     protected function auditableId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'before'     => 'array',
+            'after'      => 'array',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+        ];
     }
 
     protected function changerId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

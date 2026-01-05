@@ -1,4 +1,5 @@
 <?php
+
 /**
  * WholePeriodChartGenerator.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,8 +24,9 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Chart\Category;
 
+use FireflyIII\Support\Facades\Navigation;
 use Carbon\Carbon;
-use FireflyIII\Models\AccountType;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\Category;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Category\OperationsRepositoryInterface;
@@ -35,9 +37,11 @@ use Illuminate\Support\Collection;
  */
 class WholePeriodChartGenerator
 {
+    public bool $convertToPrimary;
+
     public function generate(Category $category, Carbon $start, Carbon $end): array
     {
-        $collection        = new Collection([$category]);
+        $collection        = new Collection()->push($category);
 
         /** @var OperationsRepositoryInterface $opsRepository */
         $opsRepository     = app(OperationsRepositoryInterface::class);
@@ -45,7 +49,7 @@ class WholePeriodChartGenerator
         /** @var AccountRepositoryInterface $accountRepository */
         $accountRepository = app(AccountRepositoryInterface::class);
 
-        $types             = [AccountType::DEFAULT, AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE];
+        $types             = [AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
         $accounts          = $accountRepository->getAccountsByType($types);
         $step              = $this->calculateStep($start, $end);
         $chartData         = [];
@@ -56,10 +60,10 @@ class WholePeriodChartGenerator
 
         while ($current <= $end) {
             $key          = $current->format('Y-m-d');
-            $currentEnd   = app('navigation')->endOfPeriod($current, $step);
+            $currentEnd   = Navigation::endOfPeriod($current, $step);
             $spent[$key]  = $opsRepository->sumExpenses($current, $currentEnd, $accounts, $collection);
             $earned[$key] = $opsRepository->sumIncome($current, $currentEnd, $accounts, $collection);
-            $current      = app('navigation')->addPeriod($current, $step, 0);
+            $current      = Navigation::addPeriod($current, $step);
         }
 
         $currencies        = $this->extractCurrencies($spent) + $this->extractCurrencies($earned);
@@ -88,7 +92,7 @@ class WholePeriodChartGenerator
 
         while ($current <= $end) {
             $key     = $current->format('Y-m-d');
-            $label   = app('navigation')->periodShow($current, $step);
+            $label   = Navigation::periodShow($current, $step);
 
             /** @var array $currency */
             foreach ($currencies as $currency) {
@@ -101,7 +105,7 @@ class WholePeriodChartGenerator
                 $chartData[$spentInfoKey]['entries'][$label]  = app('steam')->bcround($spentAmount, $currency['currency_decimal_places']);
                 $chartData[$earnedInfoKey]['entries'][$label] = app('steam')->bcround($earnedAmount, $currency['currency_decimal_places']);
             }
-            $current = app('navigation')->addPeriod($current, $step, 0);
+            $current = Navigation::addPeriod($current, $step);
         }
 
         return $chartData;
@@ -121,7 +125,7 @@ class WholePeriodChartGenerator
             $step = '1M';
         }
         if ($months > 100) {
-            $step = '1Y';
+            return '1Y';
         }
 
         return $step;

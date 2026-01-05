@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\User;
 
+use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -35,58 +36,32 @@ class TransactionCreation extends Notification
 {
     use Queueable;
 
-    private array $collection;
+    public function __construct(private array $collection) {}
 
     /**
-     * Create a new notification instance.
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function __construct(array $collection)
-    {
-        $this->collection = $collection;
-    }
-
-    /**
-     * Get the array representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function toArray($notifiable)
+    public function toArray(User $notifiable): array
     {
         return [
         ];
     }
 
     /**
-     * Get the mail representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return MailMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toMail($notifiable)
+    public function toMail(User $notifiable): MailMessage
     {
-        return (new MailMessage())
+        return new MailMessage()
             ->markdown('emails.report-new-journals', ['transformed' => $this->collection])
             ->subject(trans_choice('email.new_journals_subject', count($this->collection)))
         ;
     }
 
     /**
-     * Get the notification's delivery channels.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function via($notifiable)
+    public function via(User $notifiable): array
     {
         return ['mail'];
     }

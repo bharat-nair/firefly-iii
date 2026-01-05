@@ -23,8 +23,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Binder;
 
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
-use FireflyIII\Models\TransactionType;
 use Illuminate\Routing\Route;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -44,7 +44,7 @@ class JournalList implements BinderInterface
             // get the journals by using the collector.
             /** @var GroupCollectorInterface $collector */
             $collector = app(GroupCollectorInterface::class);
-            $collector->setTypes([TransactionType::WITHDRAWAL, TransactionType::DEPOSIT, TransactionType::TRANSFER, TransactionType::RECONCILIATION]);
+            $collector->setTypes([TransactionTypeEnum::WITHDRAWAL->value, TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::TRANSFER->value, TransactionTypeEnum::RECONCILIATION->value]);
             $collector->withCategoryInformation()->withBudgetInformation()->withTagInformation()->withAccountInformation();
             $collector->setJournalIds($list);
             $result    = $collector->getExtractedJournals();
@@ -60,7 +60,7 @@ class JournalList implements BinderInterface
 
     protected static function parseList(string $value): array
     {
-        $list = array_unique(array_map('\intval', explode(',', $value)));
+        $list = array_unique(array_map(\intval(...), explode(',', $value)));
         if (0 === count($list)) { // @phpstan-ignore-line
             throw new NotFoundHttpException();
         }

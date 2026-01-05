@@ -1,4 +1,5 @@
 <?php
+
 /**
  * IsValidAttachmentModel.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Closure;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Bill;
 use FireflyIII\Models\Budget;
@@ -46,7 +48,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class IsValidAttachmentModel implements ValidationRule
 {
-    private string $model;
+    private readonly string $model;
 
     /**
      * IsValidAttachmentModel constructor.
@@ -67,9 +69,9 @@ class IsValidAttachmentModel implements ValidationRule
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!auth()->check()) {
             $fail('validation.model_id_invalid')->translate();
@@ -77,14 +79,14 @@ class IsValidAttachmentModel implements ValidationRule
             return;
         }
         $result = match ($this->model) {
-            Account::class            => $this->validateAccount((int)$value),
-            Bill::class               => $this->validateBill((int)$value),
-            Budget::class             => $this->validateBudget((int)$value),
-            Category::class           => $this->validateCategory((int)$value),
-            PiggyBank::class          => $this->validatePiggyBank((int)$value),
-            Tag::class                => $this->validateTag((int)$value),
-            Transaction::class        => $this->validateTransaction((int)$value),
-            TransactionJournal::class => $this->validateJournal((int)$value),
+            Account::class            => $this->validateAccount((int) $value),
+            Bill::class               => $this->validateBill((int) $value),
+            Budget::class             => $this->validateBudget((int) $value),
+            Category::class           => $this->validateCategory((int) $value),
+            PiggyBank::class          => $this->validatePiggyBank((int) $value),
+            Tag::class                => $this->validateTag((int) $value),
+            Transaction::class        => $this->validateTransaction((int) $value),
+            TransactionJournal::class => $this->validateJournal((int) $value),
             default                   => false,
         };
 

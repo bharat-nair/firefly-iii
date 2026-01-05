@@ -27,7 +27,10 @@ namespace FireflyIII\Http\Middleware;
 use FireflyIII\Exceptions\BadHttpHeaderException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Safe\Exceptions\PcreException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+
+use function Safe\preg_match;
 
 class AcceptHeaders
 {
@@ -37,26 +40,33 @@ class AcceptHeaders
      * @return Response
      *
      * @throws BadHttpHeaderException
+     * @throws PcreException
      */
     public function handle(Request $request, callable $next): mixed
     {
         $method       = $request->getMethod();
         $accepts      = ['application/x-www-form-urlencoded', 'application/json', 'application/vnd.api+json', 'application/octet-stream', '*/*'];
         $contentTypes = ['application/x-www-form-urlencoded', 'application/json', 'application/vnd.api+json', 'application/octet-stream'];
-        $submitted    = (string)$request->header('Content-Type');
+        $submitted    = (string) $request->header('Content-Type');
 
         // if bad Accept header, send error.
         if (!$request->accepts($accepts)) {
             throw new BadHttpHeaderException(sprintf('Accept header "%s" is not something this server can provide.', $request->header('Accept')));
         }
         // if bad 'Content-Type' header, refuse service.
-        if (('POST' === $method || 'PUT' === $method) && !$request->hasHeader('Content-Type')) {
+
+        // some routes are exempt from this.
+        $exempt       = [
+            'api.v1.data.bulk.transactions',
+        ];
+
+        if (('POST' === $method || 'PUT' === $method) && !$request->hasHeader('Content-Type') && !in_array($request->route()->getName(), $exempt, true)) {
             $error             = new BadHttpHeaderException('Content-Type header cannot be empty.');
             $error->statusCode = 415;
 
             throw $error;
         }
-        if (('POST' === $method || 'PUT' === $method) && !$this->acceptsHeader($submitted, $contentTypes)) {
+        if (('POST' === $method || 'PUT' === $method) && !$this->acceptsHeader($submitted, $contentTypes) && !in_array($request->route()->getName(), $exempt, true)) {
             $error             = new BadHttpHeaderException(sprintf('Content-Type cannot be "%s"', $submitted));
             $error->statusCode = 415;
 

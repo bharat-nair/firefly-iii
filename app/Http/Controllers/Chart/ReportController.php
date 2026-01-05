@@ -23,19 +23,22 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Chart;
 
+use FireflyIII\Support\Facades\Navigation;
 use Carbon\Carbon;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Generator\Chart\Basic\GeneratorInterface;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Helpers\Report\NetWorthInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Http\Controllers\BasicDataSupport;
 use FireflyIII\Support\Http\Controllers\ChartGeneration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class ReportController.
@@ -72,7 +75,7 @@ class ReportController extends Controller
         if ($cache->has()) {
             return response()->json($cache->get());
         }
-        $locale            = app('steam')->getLocale();
+        $locale            = Steam::getLocale();
         $current           = clone $start;
         $chartData         = [];
 
@@ -84,11 +87,11 @@ class ReportController extends Controller
         /** @var AccountRepositoryInterface $accountRepository */
         $accountRepository = app(AccountRepositoryInterface::class);
         $filtered          = $accounts->filter(
-            static function (Account $account) use ($accountRepository) {
+            static function (Account $account) use ($accountRepository): bool {
                 $includeNetWorth = $accountRepository->getMetaValue($account, 'include_net_worth');
                 $result          = null === $includeNetWorth ? true : '1' === $includeNetWorth;
                 if (false === $result) {
-                    app('log')->debug(sprintf('Will not include "%s" in net worth charts.', $account->name));
+                    Log::debug(sprintf('Will not include "%s" in net worth charts.', $account->name));
                 }
 
                 return $result;
@@ -99,16 +102,19 @@ class ReportController extends Controller
 
         while ($current < $end) {
             // get balances by date, grouped by currency.
-            $result = $helper->byAccounts($filtered, $current);
+            $balanceCurrent = clone $current;
+            $balanceCurrent->subDay()->endOfDay(); // go to correct moment.
+            Log::debug(sprintf('Call byAccounts("%s")', $balanceCurrent->format('Y-m-d H:i:s')));
+            $result         = $helper->byAccounts($filtered, $balanceCurrent);
 
             // loop result, add to array.
             /** @var array $netWorthItem */
             foreach ($result as $key => $netWorthItem) {
-                if ('native' === $key) {
+                if ('primary' === $key) {
                     continue;
                 }
                 $currencyId                                = $netWorthItem['currency_id'];
-                $label                                     = $current->isoFormat((string)trans('config.month_and_day_js', [], $locale));
+                $label                                     = $current->isoFormat((string) trans('config.month_and_day_js', [], $locale));
                 if (!array_key_exists($currencyId, $chartData)) {
                     $chartData[$currencyId] = [
                         'label'           => 'Net worth in '.$netWorthItem['currency_name'],
@@ -132,10 +138,11 @@ class ReportController extends Controller
     /**
      * Shows income and expense, debit/credit: operations.
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function operations(Collection $accounts, Carbon $start, Carbon $end): JsonResponse
     {
+        $end->endOfDay();
         // chart properties for cache:
         $cache          = new CacheProperties();
         $cache->addProperty('chart.report.operations');
@@ -143,13 +150,14 @@ class ReportController extends Controller
         $cache->addProperty($accounts);
         $cache->addProperty($end);
         if ($cache->has()) {
-            // return response()->json($cache->get());
+            return response()->json($cache->get());
         }
 
-        app('log')->debug('Going to do operations for accounts ', $accounts->pluck('id')->toArray());
-        $format         = app('navigation')->preferredCarbonFormat($start, $end);
-        $titleFormat    = app('navigation')->preferredCarbonLocalizedFormat($start, $end);
-        $preferredRange = app('navigation')->preferredRangeFormat($start, $end);
+        Log::debug('Going to do operations for accounts ', $accounts->pluck('id')->toArray());
+        Log::debug(sprintf('Period: %s to %s', $start->toW3cString(), $end->toW3cString()));
+        $format         = Navigation::preferredCarbonFormat($start, $end);
+        $titleFormat    = Navigation::preferredCarbonLocalizedFormat($start, $end);
+        $preferredRange = Navigation::preferredRangeFormat($start, $end);
         $ids            = $accounts->pluck('id')->toArray();
         $data           = [];
         $chartData      = [];
@@ -158,20 +166,27 @@ class ReportController extends Controller
         $collector      = app(GroupCollectorInterface::class);
         $collector->setRange($start, $end)->withAccountInformation();
         $collector->setXorAccounts($accounts);
-        $collector->setTypes([TransactionType::WITHDRAWAL, TransactionType::DEPOSIT, TransactionType::RECONCILIATION, TransactionType::TRANSFER]);
+        $collector->setTypes(
+            [
+                TransactionTypeEnum::WITHDRAWAL,
+                TransactionTypeEnum::DEPOSIT,
+                TransactionTypeEnum::RECONCILIATION,
+                TransactionTypeEnum::TRANSFER,
+            ]
+        );
         $journals       = $collector->getExtractedJournals();
 
         // loop. group by currency and by period.
         /** @var array $journal */
         foreach ($journals as $journal) {
             $period                           = $journal['date']->format($format);
-            $currencyId                       = (int)$journal['currency_id'];
+            $currencyId                       = (int) $journal['currency_id'];
             $data[$currencyId]          ??= [
                 'currency_id'             => $currencyId,
                 'currency_symbol'         => $journal['currency_symbol'],
                 'currency_code'           => $journal['currency_code'],
                 'currency_name'           => $journal['currency_name'],
-                'currency_decimal_places' => (int)$journal['currency_decimal_places'],
+                'currency_decimal_places' => (int) $journal['currency_decimal_places'],
             ];
             $data[$currencyId][$period] ??= [
                 'period' => $period,
@@ -180,21 +195,31 @@ class ReportController extends Controller
             ];
             // in our outgoing?
             $key                              = 'spent';
-            $amount                           = app('steam')->positive($journal['amount']);
+            $amount                           = Steam::positive($journal['amount']);
 
             // deposit = incoming
             // transfer or reconcile or opening balance, and these accounts are the destination.
-            if (TransactionType::DEPOSIT === $journal['transaction_type_type'] || ((TransactionType::TRANSFER === $journal['transaction_type_type'] || TransactionType::RECONCILIATION === $journal['transaction_type_type'] || TransactionType::OPENING_BALANCE === $journal['transaction_type_type']) && in_array($journal['destination_account_id'], $ids, true))) {
+            if (
+                TransactionTypeEnum::DEPOSIT->value === $journal['transaction_type_type']
+                || ((
+                    TransactionTypeEnum::TRANSFER->value === $journal['transaction_type_type']
+                        || TransactionTypeEnum::RECONCILIATION->value === $journal['transaction_type_type']
+                        || TransactionTypeEnum::OPENING_BALANCE->value === $journal['transaction_type_type']
+                )
+                    && in_array($journal['destination_account_id'], $ids, true))) {
                 $key = 'earned';
             }
-            $data[$currencyId][$period][$key] = bcadd($data[$currencyId][$period][$key], $amount);
+            $data[$currencyId][$period][$key] = bcadd((string) $data[$currencyId][$period][$key], $amount);
         }
 
         // loop this data, make chart bars for each currency:
+        Log::debug('Looping data');
+
         /** @var array $currency */
         foreach ($data as $currency) {
+            Log::debug(sprintf('Now processing currency "%s"', $currency['currency_name']));
             $income       = [
-                'label'           => (string)trans('firefly.box_earned_in_currency', ['currency' => $currency['currency_name']]),
+                'label'           => (string) trans('firefly.box_earned_in_currency', ['currency' => $currency['currency_name']]),
                 'type'            => 'bar',
                 'backgroundColor' => 'rgba(0, 141, 76, 0.5)', // green
                 'currency_id'     => $currency['currency_id'],
@@ -203,7 +228,7 @@ class ReportController extends Controller
                 'entries'         => [],
             ];
             $expense      = [
-                'label'           => (string)trans('firefly.box_spent_in_currency', ['currency' => $currency['currency_name']]),
+                'label'           => (string) trans('firefly.box_spent_in_currency', ['currency' => $currency['currency_name']]),
                 'type'            => 'bar',
                 'backgroundColor' => 'rgba(219, 68, 55, 0.5)', // red
                 'currency_id'     => $currency['currency_id'],
@@ -214,25 +239,36 @@ class ReportController extends Controller
             // loop all possible periods between $start and $end
             $currentStart = clone $start;
             $currentEnd   = clone $end;
+            Log::debug(sprintf('START current start and end: %s and %s', $currentStart->toW3cString(), $currentEnd->toW3cString()));
 
             // #8374. Sloppy fix for yearly charts. Not really interested in a better fix with v2 layout and all.
             if ('1Y' === $preferredRange) {
-                $currentEnd = app('navigation')->endOfPeriod($currentEnd, $preferredRange);
+                $currentEnd = Navigation::endOfPeriod($currentEnd, $preferredRange);
             }
+            Log::debug('Start of sub-loop');
             while ($currentStart <= $currentEnd) {
+                Log::debug(sprintf('Current start: %s', $currentStart->toW3cString()));
                 $key          = $currentStart->format($format);
                 $title        = $currentStart->isoFormat($titleFormat);
                 // #8663 make sure the period exists in the data previously collected.
                 if (array_key_exists($key, $currency)) {
-                    $income['entries'][$title]  = app('steam')->bcround($currency[$key]['earned'] ?? '0', $currency['currency_decimal_places']);
-                    $expense['entries'][$title] = app('steam')->bcround($currency[$key]['spent'] ?? '0', $currency['currency_decimal_places']);
+                    $income['entries'][$title]  = Steam::bcround($currency[$key]['earned'] ?? '0', $currency['currency_decimal_places']);
+                    $expense['entries'][$title] = Steam::bcround($currency[$key]['spent'] ?? '0', $currency['currency_decimal_places']);
                 }
-                $currentStart = app('navigation')->addPeriod($currentStart, $preferredRange, 0);
+                // #9477 if the period is not in the data, add it with zero values.
+                if (!array_key_exists($key, $currency)) {
+                    $income['entries'][$title]  = '0';
+                    $expense['entries'][$title] = '0';
+
+                }
+                $currentStart = Navigation::addPeriod($currentStart, $preferredRange);
             }
+            Log::debug('End of sub-loop');
 
             $chartData[]  = $income;
             $chartData[]  = $expense;
         }
+        Log::debug('End of loop');
 
         $data           = $this->generator->multiSet($chartData);
         $cache->store($data);

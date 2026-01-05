@@ -23,30 +23,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Facades;
 
-use FireflyIII\Models\Preference;
-use FireflyIII\User;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Facade;
 
-/**
- * Class Preferences.
- *
- * @method Collection      beginsWith(User $user, string $search)
- * @method bool            delete(string $name)
- * @method Collection      findByName(string $name)
- * @method Preference      get(string $name, $value = null)
- * @method array           getArrayForUser(User $user, array $list)
- * @method null|Preference getForUser(User $user, string $name, $default = null)
- * @method string          lastActivity()
- * @method void            mark()
- * @method Preference      set(string $name, $value)
- * @method Preference      setForUser(User $user, string $name, $value)
- */
 class Preferences extends Facade
 {
     public function __construct()
     {
-        app('log')->warning('Hi there');
+        Log::warning('Hi there');
     }
 
     /**

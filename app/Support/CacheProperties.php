@@ -23,7 +23,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support;
 
+use FireflyIII\Support\Facades\Preferences;
+use Carbon\Carbon;
+use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use JsonException;
+
+use function Safe\json_encode;
 
 /**
  * Class CacheProperties.
@@ -38,7 +45,8 @@ class CacheProperties
         $this->properties = new Collection();
         if (auth()->check()) {
             $this->addProperty(auth()->user()->id);
-            $this->addProperty(app('preferences')->lastActivity());
+            $this->addProperty(Preferences::lastActivity());
+            $this->addProperty(Steam::anonymous());
         }
     }
 
@@ -55,7 +63,7 @@ class CacheProperties
      */
     public function get()
     {
-        return \Cache::get($this->hash);
+        return Cache::get($this->hash);
     }
 
     public function getHash(): string
@@ -70,21 +78,7 @@ class CacheProperties
         }
         $this->hash();
 
-        return \Cache::has($this->hash);
-    }
-
-    private function hash(): void
-    {
-        $content    = '';
-        foreach ($this->properties as $property) {
-            try {
-                $content .= json_encode($property, JSON_THROW_ON_ERROR);
-            } catch (\JsonException $e) {
-                // @ignoreException
-                $content .= hash('sha256', (string)time());
-            }
-        }
-        $this->hash = substr(hash('sha256', $content), 0, 16);
+        return Cache::has($this->hash);
     }
 
     /**
@@ -92,6 +86,20 @@ class CacheProperties
      */
     public function store($data): void
     {
-        \Cache::forever($this->hash, $data);
+        Cache::forever($this->hash, $data);
+    }
+
+    private function hash(): void
+    {
+        $content    = '';
+        foreach ($this->properties as $property) {
+            try {
+                $content = sprintf('%s%s', $content, json_encode($property, JSON_THROW_ON_ERROR));
+            } catch (JsonException) {
+                // @ignoreException
+                $content = sprintf('%s%s', $content, hash('sha256', (string)Carbon::now()->getTimestamp()));
+            }
+        }
+        $this->hash = substr(hash('sha256', $content), 0, 16);
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * EditController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Recurring;
 
+use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Enums\RecurrenceRepetitionWeekend;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
@@ -32,14 +35,16 @@ use FireflyIII\Models\RecurrenceRepetition;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
 use FireflyIII\Repositories\Recurring\RecurringRepositoryInterface;
+use FireflyIII\Support\Facades\ExpandedForm;
+use FireflyIII\Support\JsonApi\Enrichments\RecurringEnrichment;
 use FireflyIII\Transformers\RecurrenceTransformer;
+use FireflyIII\User;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\ParameterBag;
 
 /**
  * Class EditController
@@ -49,7 +54,7 @@ class EditController extends Controller
     private AttachmentHelperInterface    $attachments;
     private BillRepositoryInterface      $billRepository;
     private BudgetRepositoryInterface    $budgetRepos;
-    private RecurringRepositoryInterface $recurring;
+    private RecurringRepositoryInterface $repository;
 
     /**
      * EditController constructor.
@@ -62,10 +67,10 @@ class EditController extends Controller
         $this->middleware(
             function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-paint-brush');
-                app('view')->share('title', (string)trans('firefly.recurrences'));
-                app('view')->share('subTitle', (string)trans('firefly.recurrences'));
+                app('view')->share('title', (string) trans('firefly.recurrences'));
+                app('view')->share('subTitle', (string) trans('firefly.recurrences'));
 
-                $this->recurring      = app(RecurringRepositoryInterface::class);
+                $this->repository     = app(RecurringRepositoryInterface::class);
                 $this->budgetRepos    = app(BudgetRepositoryInterface::class);
                 $this->attachments    = app(AttachmentHelperInterface::class);
                 $this->billRepository = app(BillRepositoryInterface::class);
@@ -82,27 +87,34 @@ class EditController extends Controller
      *
      * @throws FireflyException
      */
-    public function edit(Request $request, Recurrence $recurrence)
+    public function edit(Request $request, Recurrence $recurrence): Factory|\Illuminate\Contracts\View\View
     {
         // TODO this should be in the repository.
-        $count                            = $recurrence->recurrenceTransactions()->count();
+        $count                              = $recurrence->recurrenceTransactions()->count();
         if (0 === $count) {
             throw new FireflyException('This recurring transaction has no meta-data. You will have to delete it and recreate it. Sorry!');
         }
 
-        /** @var RecurrenceTransformer $transformer */
-        $transformer                      = app(RecurrenceTransformer::class);
-        $transformer->setParameters(new ParameterBag());
+        // enrich
+        /** @var User $admin */
+        $admin                              = auth()->user();
+        $enrichment                         = new RecurringEnrichment();
+        $enrichment->setUser($admin);
 
-        $array                            = $transformer->transform($recurrence);
-        $budgets                          = app('expandedform')->makeSelectListWithEmpty($this->budgetRepos->getActiveBudgets());
-        $bills                            = app('expandedform')->makeSelectListWithEmpty($this->billRepository->getActiveBills());
+        /** @var Recurrence $recurrence */
+        $recurrence                         = $enrichment->enrichSingle($recurrence);
+
+        /** @var RecurrenceTransformer $transformer */
+        $transformer                        = app(RecurrenceTransformer::class);
+        $array                              = $transformer->transform($recurrence);
+        $budgets                            = ExpandedForm::makeSelectListWithEmpty($this->budgetRepos->getActiveBudgets());
+        $bills                              = ExpandedForm::makeSelectListWithEmpty($this->billRepository->getActiveBills());
 
         /** @var RecurrenceRepetition $repetition */
-        $repetition                       = $recurrence->recurrenceRepetitions()->first();
-        $currentRepType                   = $repetition->repetition_type;
+        $repetition                         = $recurrence->recurrenceRepetitions()->first();
+        $currentRepType                     = $repetition->repetition_type;
         if ('' !== $repetition->repetition_moment) {
-            $currentRepType .= ','.$repetition->repetition_moment;
+            $currentRepType = sprintf('%s,%s', $currentRepType, $repetition->repetition_moment);
         }
 
         // put previous url in session if not redirect from store (not "return_to_edit").
@@ -111,11 +123,11 @@ class EditController extends Controller
         }
         $request->session()->forget('recurrences.edit.fromUpdate');
 
-        $repetitionEnd                    = 'forever';
-        $repetitionEnds                   = [
-            'forever'    => (string)trans('firefly.repeat_forever'),
-            'until_date' => (string)trans('firefly.repeat_until_date'),
-            'times'      => (string)trans('firefly.repeat_times'),
+        $repetitionEnd                      = 'forever';
+        $repetitionEnds                     = [
+            'forever'    => (string) trans('firefly.repeat_forever'),
+            'until_date' => (string) trans('firefly.repeat_until_date'),
+            'times'      => (string) trans('firefly.repeat_times'),
         ];
         if (null !== $recurrence->repeat_until) {
             $repetitionEnd = 'until_date';
@@ -124,38 +136,32 @@ class EditController extends Controller
             $repetitionEnd = 'times';
         }
 
-        $weekendResponses                 = [
-            RecurrenceRepetition::WEEKEND_DO_NOTHING    => (string)trans('firefly.do_nothing'),
-            RecurrenceRepetition::WEEKEND_SKIP_CREATION => (string)trans('firefly.skip_transaction'),
-            RecurrenceRepetition::WEEKEND_TO_FRIDAY     => (string)trans('firefly.jump_to_friday'),
-            RecurrenceRepetition::WEEKEND_TO_MONDAY     => (string)trans('firefly.jump_to_monday'),
+        $weekendResponses                   = [
+            RecurrenceRepetitionWeekend::WEEKEND_DO_NOTHING->value    => (string) trans('firefly.do_nothing'),
+            RecurrenceRepetitionWeekend::WEEKEND_SKIP_CREATION->value => (string) trans('firefly.skip_transaction'),
+            RecurrenceRepetitionWeekend::WEEKEND_TO_FRIDAY->value     => (string) trans('firefly.jump_to_friday'),
+            RecurrenceRepetitionWeekend::WEEKEND_TO_MONDAY->value     => (string) trans('firefly.jump_to_monday'),
         ];
 
-        $hasOldInput                      = null !== $request->old('_token');
-        $preFilled                        = [
-            'transaction_type'          => strtolower($recurrence->transactionType->type),
-            'active'                    => $hasOldInput ? (bool)$request->old('active') : $recurrence->active,
-            'apply_rules'               => $hasOldInput ? (bool)$request->old('apply_rules') : $recurrence->apply_rules,
+        $hasOldInput                        = null !== $request->old('_token');
+        $preFilled                          = [
+            'transaction_type'          => strtolower((string) $recurrence->transactionType->type),
+            'active'                    => $hasOldInput ? (bool) $request->old('active') : $recurrence->active,
+            'apply_rules'               => $hasOldInput ? (bool) $request->old('apply_rules') : $recurrence->apply_rules,
             'deposit_source_id'         => $array['transactions'][0]['source_id'],
             'withdrawal_destination_id' => $array['transactions'][0]['destination_id'],
         ];
-        $array['first_date']              = substr((string)$array['first_date'], 0, 10);
-        $array['repeat_until']            = substr((string)$array['repeat_until'], 0, 10);
-        $array['transactions'][0]['tags'] = implode(',', $array['transactions'][0]['tags'] ?? []);
+        $array['first_date']                = substr((string) $array['first_date'], 0, 10);
+        $array['repeat_until']              = substr((string) $array['repeat_until'], 0, 10);
+        $array['transactions'][0]['tags']   = implode(',', $array['transactions'][0]['tags'] ?? []);
+        $array['transactions'][0]['amount'] = round((float) $array['transactions'][0]['amount'], $array['transactions'][0]['currency_decimal_places']);
+        if (null !== $array['transactions'][0]['foreign_amount'] && '' !== $array['transactions'][0]['foreign_amount']) {
+            $array['transactions'][0]['foreign_amount'] = round((float) $array['transactions'][0]['foreign_amount'], $array['transactions'][0]['foreign_currency_decimal_places'] ?? 2);
+        }
 
         return view(
             'recurring.edit',
-            compact(
-                'recurrence',
-                'array',
-                'bills',
-                'weekendResponses',
-                'budgets',
-                'preFilled',
-                'currentRepType',
-                'repetitionEnd',
-                'repetitionEnds'
-            )
+            ['recurrence' => $recurrence, 'array' => $array, 'bills' => $bills, 'weekendResponses' => $weekendResponses, 'budgets' => $budgets, 'preFilled' => $preFilled, 'currentRepType' => $currentRepType, 'repetitionEnd' => $repetitionEnd, 'repetitionEnds' => $repetitionEnds]
         );
     }
 
@@ -168,29 +174,29 @@ class EditController extends Controller
      */
     public function update(RecurrenceFormRequest $request, Recurrence $recurrence)
     {
-        $data     = $request->getAll();
-        $this->recurring->update($recurrence, $data);
+        $data       = $request->getAll();
+        $recurrence = $this->repository->update($recurrence, $data);
 
-        $request->session()->flash('success', (string)trans('firefly.updated_recurrence', ['title' => $recurrence->title]));
+        $request->session()->flash('success', (string) trans('firefly.updated_recurrence', ['title' => $recurrence->title]));
         Log::channel('audit')->info(sprintf('Updated recurrence #%d.', $recurrence->id), $data);
 
         // store new attachment(s):
         /** @var null|array $files */
-        $files    = $request->hasFile('attachments') ? $request->file('attachments') : null;
+        $files      = $request->hasFile('attachments') ? $request->file('attachments') : null;
         if (null !== $files && !auth()->user()->hasRole('demo')) {
             $this->attachments->saveAttachmentsForModel($recurrence, $files);
         }
         if (null !== $files && auth()->user()->hasRole('demo')) {
             Log::channel('audit')->warning(sprintf('The demo user is trying to upload attachments in %s.', __METHOD__));
-            session()->flash('info', (string)trans('firefly.no_att_demo_user'));
+            session()->flash('info', (string) trans('firefly.no_att_demo_user'));
         }
 
         if (count($this->attachments->getMessages()->get('attachments')) > 0) {
             $request->session()->flash('info', $this->attachments->getMessages()->get('attachments'));
         }
-        app('preferences')->mark();
-        $redirect = redirect($this->getPreviousUrl('recurrences.edit.url'));
-        if (1 === (int)$request->get('return_to_edit')) {
+        Preferences::mark();
+        $redirect   = redirect($this->getPreviousUrl('recurrences.edit.url'));
+        if (1 === (int) $request->get('return_to_edit')) {
             // set value so edit routine will not overwrite URL:
             $request->session()->put('recurrences.edit.fromUpdate', true);
 

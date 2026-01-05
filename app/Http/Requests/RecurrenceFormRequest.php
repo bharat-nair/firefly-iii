@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RecurrenceFormRequest.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,10 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\CategoryFactory;
 use FireflyIII\Models\Recurrence;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Rules\ValidRecurrenceRepetitionType;
 use FireflyIII\Rules\ValidRecurrenceRepetitionValue;
@@ -35,7 +37,6 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Validation\AccountValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class RecurrenceFormRequest
@@ -50,7 +51,7 @@ class RecurrenceFormRequest extends FormRequest
      *
      * @throws FireflyException
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function getAll(): array
     {
@@ -125,7 +126,7 @@ class RecurrenceFormRequest extends FormRequest
             $return['transactions'][0]['source_id']      = $this->convertInteger('source_id');
             $return['transactions'][0]['destination_id'] = $this->convertInteger('destination_id');
         }
-        if (true === $throwError) {
+        if ($throwError) {
             throw new FireflyException(sprintf('Cannot handle transaction type "%s"', $this->convertString('transaction_type')));
         }
 
@@ -137,7 +138,7 @@ class RecurrenceFormRequest extends FormRequest
          * @var int   $index
          * @var array $transaction
          */
-        foreach ($return['transactions'] as $index => $transaction) {
+        foreach ($return['transactions'] as $index => $transaction) { // @phpstan-ignore-line
             $categoryName = $transaction['category_name'] ?? null;
             if (null !== $categoryName) {
                 $category = $factory->findOrCreate(null, $categoryName);
@@ -242,15 +243,15 @@ class RecurrenceFormRequest extends FormRequest
 
         // switch on type to expand rules for source and destination accounts:
         $type       = strtolower($this->convertString('transaction_type'));
-        if (strtolower(TransactionType::WITHDRAWAL) === $type) {
+        if (strtolower(TransactionTypeEnum::WITHDRAWAL->value) === $type) {
             $rules['source_id']        = 'required|exists:accounts,id|belongsToUser:accounts';
             $rules['destination_name'] = 'min:1|max:255|nullable';
         }
-        if (strtolower(TransactionType::DEPOSIT) === $type) {
+        if (strtolower(TransactionTypeEnum::DEPOSIT->value) === $type) {
             $rules['source_name']    = 'min:1|max:255|nullable';
             $rules['destination_id'] = 'required|exists:accounts,id|belongsToUser:accounts';
         }
-        if (strtolower(TransactionType::TRANSFER) === $type) {
+        if (strtolower(TransactionTypeEnum::TRANSFER->value) === $type) {
             // this may not work:
             $rules['source_id']      = 'required|exists:accounts,id|belongsToUser:accounts|different:destination_id';
             $rules['destination_id'] = 'required|exists:accounts,id|belongsToUser:accounts|different:source_id';
@@ -280,7 +281,7 @@ class RecurrenceFormRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 
@@ -291,7 +292,7 @@ class RecurrenceFormRequest extends FormRequest
      */
     public function validateAccountInformation(Validator $validator): void
     {
-        app('log')->debug('Now in validateAccountInformation (RecurrenceFormRequest)()');
+        Log::debug('Now in validateAccountInformation (RecurrenceFormRequest)()');
 
         /** @var AccountValidator $accountValidator */
         $accountValidator = app(AccountValidator::class);
@@ -310,20 +311,20 @@ class RecurrenceFormRequest extends FormRequest
         $throwError       = true;
         if ('withdrawal' === $type) {
             $throwError    = false;
-            $sourceId      = (int)$data['source_id'];
-            $destinationId = (int)$data['withdrawal_destination_id'];
+            $sourceId      = (int) $data['source_id'];
+            $destinationId = (int) $data['withdrawal_destination_id'];
         }
         if ('deposit' === $type) {
             $throwError    = false;
-            $sourceId      = (int)$data['deposit_source_id'];
-            $destinationId = (int)($data['destination_id'] ?? 0);
+            $sourceId      = (int) $data['deposit_source_id'];
+            $destinationId = (int) ($data['destination_id'] ?? 0);
         }
         if ('transfer' === $type) {
             $throwError    = false;
-            $sourceId      = (int)$data['source_id'];
-            $destinationId = (int)($data['destination_id'] ?? 0);
+            $sourceId      = (int) $data['source_id'];
+            $destinationId = (int) ($data['destination_id'] ?? 0);
         }
-        if (true === $throwError) {
+        if ($throwError) {
             throw new FireflyException(sprintf('Cannot handle transaction type "%s"', $this->convertString('transaction_type')));
         }
 
@@ -332,7 +333,7 @@ class RecurrenceFormRequest extends FormRequest
 
         // do something with result:
         if (false === $validSource) {
-            $message = (string)trans('validation.generic_invalid_source');
+            $message = (string) trans('validation.generic_invalid_source');
             $validator->errors()->add('source_id', $message);
             $validator->errors()->add('deposit_source_id', $message);
 
@@ -343,7 +344,7 @@ class RecurrenceFormRequest extends FormRequest
         $validDestination = $accountValidator->validateDestination(['id' => $destinationId]);
         // do something with result:
         if (false === $validDestination) {
-            $message = (string)trans('validation.generic_invalid_destination');
+            $message = (string) trans('validation.generic_invalid_destination');
             $validator->errors()->add('destination_id', $message);
             $validator->errors()->add('withdrawal_destination_id', $message);
         }

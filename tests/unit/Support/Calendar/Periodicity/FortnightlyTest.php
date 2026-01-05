@@ -24,9 +24,9 @@ declare(strict_types=1);
 
 namespace Tests\unit\Support\Calendar\Periodicity;
 
+use FireflyIII\Support\Calendar\Periodicity\Fortnightly;
 use Carbon\Carbon;
 use FireflyIII\Support\Calendar\Periodicity;
-use FireflyIII\Support\Calendar\Periodicity\Interval;
 
 /**
  * @group unit-test
@@ -40,9 +40,9 @@ use FireflyIII\Support\Calendar\Periodicity\Interval;
  */
 final class FortnightlyTest extends IntervalTestCase
 {
-    public static function factory(): Interval
+    public static function factory(): Fortnightly
     {
-        return new Periodicity\Fortnightly();
+        return new Fortnightly();
     }
 
     public static function provideIntervals(): array

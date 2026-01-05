@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ListController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -24,17 +25,18 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\Bill;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Api\V1\Requests\Generic\PaginationDateRangeRequest;
+use FireflyIII\Api\V1\Requests\PaginationRequest;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Bill;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Support\Http\Api\TransactionFilter;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\AttachmentTransformer;
 use FireflyIII\Transformers\RuleTransformer;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
@@ -69,25 +71,26 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/bills/listAttachmentByBill
      *
      * Display a listing of the resource.
-     *
-     * @throws FireflyException
      */
-    public function attachments(Bill $bill): JsonResponse
+    public function attachments(PaginationRequest $request, Bill $bill): JsonResponse
     {
+        [
+            'limit'  => $limit,
+            'offset' => $offset,
+            'page'   => $page,
+        ]            = $request->attributes->all();
         $manager     = $this->getManager();
-        $pageSize    = $this->parameters->get('limit');
         $collection  = $this->repository->getAttachments($bill);
 
         $count       = $collection->count();
-        $attachments = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $attachments = $collection->slice($offset, $limit);
 
         // make paginator:
-        $paginator   = new LengthAwarePaginator($attachments, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($attachments, $count, $limit, $page);
         $paginator->setPath(route('api.v1.bills.attachments', [$bill->id]).$this->buildParams());
 
         /** @var AttachmentTransformer $transformer */
         $transformer = app(AttachmentTransformer::class);
-        $transformer->setParameters($this->parameters);
 
         $resource    = new FractalCollection($attachments, $transformer, 'attachments');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
@@ -100,28 +103,26 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/bills/listRuleByBill
      *
      * List all of them.
-     *
-     * @throws FireflyException
      */
-    public function rules(Bill $bill): JsonResponse
+    public function rules(PaginationRequest $request, Bill $bill): JsonResponse
     {
+        [
+            'limit'  => $limit,
+            'offset' => $offset,
+            'page'   => $page,
+        ]            = $request->attributes->all();
+
         $manager     = $this->getManager();
-
-        // types to get, page size:
-        $pageSize    = $this->parameters->get('limit');
-
-        // get list of budgets. Count it and split it.
         $collection  = $this->repository->getRulesForBill($bill);
         $count       = $collection->count();
-        $rules       = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $rules       = $collection->slice($offset, $limit);
 
         // make paginator:
-        $paginator   = new LengthAwarePaginator($rules, $count, $pageSize, $this->parameters->get('page'));
+        $paginator   = new LengthAwarePaginator($rules, $count, $limit, $page);
         $paginator->setPath(route('api.v1.bills.rules', [$bill->id]).$this->buildParams());
 
         /** @var RuleTransformer $transformer */
         $transformer = app(RuleTransformer::class);
-        $transformer->setParameters($this->parameters);
         $resource    = new FractalCollection($rules, $transformer, 'rules');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
@@ -133,16 +134,17 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/bills/listTransactionByBill
      *
      * Show all transactions.
-     *
-     * @throws FireflyException
      */
-    public function transactions(Request $request, Bill $bill): JsonResponse
+    public function transactions(PaginationDateRangeRequest $request, Bill $bill): JsonResponse
     {
-        $pageSize     = $this->parameters->get('limit');
-        $type         = $request->get('type') ?? 'default';
-        $this->parameters->set('type', $type);
+        [
+            'limit'  => $limit,
+            'page'   => $page,
+            'types'  => $types,
+            'start'  => $start,
+            'end'    => $end,
+        ]             = $request->attributes->all();
 
-        $types        = $this->mapTransactionTypes($this->parameters->get('type'));
         $manager      = $this->getManager();
 
         /** @var User $admin */
@@ -158,28 +160,31 @@ class ListController extends Controller
             // all info needed for the API:
             ->withAPIInformation()
             // set page size:
-            ->setLimit($pageSize)
+            ->setLimit($limit)
             // set page to retrieve
-            ->setPage($this->parameters->get('page'))
+            ->setPage($page)
             // set types of transactions to return.
             ->setTypes($types)
         ;
 
-        if (null !== $this->parameters->get('start')) {
-            $collector->setStart($this->parameters->get('start'));
+        if (null !== $start) {
+            $collector->setStart($start);
         }
-        if (null !== $this->parameters->get('end')) {
-            $collector->setEnd($this->parameters->get('end'));
+        if (null !== $end) {
+            $collector->setEnd($end);
         }
 
         // get paginator.
         $paginator    = $collector->getPaginatedGroups();
         $paginator->setPath(route('api.v1.bills.transactions', [$bill->id]).$this->buildParams());
-        $transactions = $paginator->getCollection();
+
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $transactions = $enrichment->enrich($paginator->getCollection());
 
         /** @var TransactionGroupTransformer $transformer */
         $transformer  = app(TransactionGroupTransformer::class);
-        $transformer->setParameters($this->parameters);
 
         $resource     = new FractalCollection($transactions, $transformer, 'transactions');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));

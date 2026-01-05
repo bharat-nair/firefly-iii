@@ -1,4 +1,5 @@
 <?php
+
 /**
  * SecureHeaders.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,9 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Middleware;
 
+use Barryvdh\Debugbar\Facades\Debugbar;
+use Closure;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Vite;
-use Barryvdh\Debugbar\Facades\Debugbar;
 
 /**
  * Class SecureHeaders
@@ -37,14 +40,14 @@ class SecureHeaders
      *
      * @return mixed
      *
-     * @throws \Exception
+     * @throws Exception
      */
-    public function handle(Request $request, \Closure $next)
+    public function handle(Request $request, Closure $next)
     {
         // generate and share nonce.
         $nonce              = base64_encode(random_bytes(16));
         Vite::useCspNonce($nonce);
-        if (class_exists('Barryvdh\Debugbar\Facades\Debugbar')) {
+        if (class_exists(Debugbar::class)) {
             Debugbar::getJavascriptRenderer()->setCspNonce($nonce);
         }
         app('view')->share('JS_NONCE', $nonce);
@@ -64,7 +67,7 @@ class SecureHeaders
         ];
 
         // overrule in development mode
-        if (true === env('IS_LOCAL_DEV')) {
+        if (true === env('IS_LOCAL_DEV')) { // @phpstan-ignore-line
             $csp = [
                 "default-src 'none'",
                 "object-src 'none'",

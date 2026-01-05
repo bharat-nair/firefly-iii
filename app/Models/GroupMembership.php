@@ -31,9 +31,6 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * @mixin IdeHelperGroupMembership
- */
 class GroupMembership extends Model
 {
     use ReturnsIntegerIdTrait;
@@ -56,10 +53,20 @@ class GroupMembership extends Model
         return $this->belongsTo(UserRole::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
+    }
+
     protected function userRoleId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

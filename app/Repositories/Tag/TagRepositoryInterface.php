@@ -24,14 +24,23 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Tag;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Location;
 use FireflyIII\Models\Tag;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface TagRepositoryInterface.
+ *
+ * @method setUserGroup(UserGroup $group)
+ * @method getUserGroup()
+ * @method getUser()
+ * @method checkUserGroupAccess(UserRoleEnum $role)
+ * @method setUser(null|Authenticatable|User $user)
+ * @method setUserGroupById(int $userGroupId)
  */
 interface TagRepositoryInterface
 {
@@ -41,6 +50,8 @@ interface TagRepositoryInterface
      * This method destroys a tag.
      */
     public function destroy(Tag $tag): bool;
+
+    public function periodCollection(Tag $tag, Carbon $start, Carbon $end): array;
 
     /**
      * Destroy all tags.
@@ -92,8 +103,6 @@ interface TagRepositoryInterface
      * Search the users tags.
      */
     public function searchTags(string $query, int $limit): Collection;
-
-    public function setUser(null|Authenticatable|User $user): void;
 
     /**
      * This method stores a tag.

@@ -43,6 +43,8 @@ use FireflyIII\Repositories\AuditLogEntry\ALERepository;
 use FireflyIII\Repositories\AuditLogEntry\ALERepositoryInterface;
 use FireflyIII\Repositories\ObjectGroup\ObjectGroupRepository;
 use FireflyIII\Repositories\ObjectGroup\ObjectGroupRepositoryInterface;
+use FireflyIII\Repositories\PeriodStatistic\PeriodStatisticRepository;
+use FireflyIII\Repositories\PeriodStatistic\PeriodStatisticRepositoryInterface;
 use FireflyIII\Repositories\TransactionType\TransactionTypeRepository;
 use FireflyIII\Repositories\TransactionType\TransactionTypeRepositoryInterface;
 use FireflyIII\Repositories\User\UserRepository;
@@ -73,13 +75,15 @@ use FireflyIII\TransactionRules\Engine\SearchRuleEngine;
 use FireflyIII\TransactionRules\Expressions\ActionExpressionLanguageProvider;
 use FireflyIII\Validation\FireflyValidator;
 use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
+use Override;
 use Symfony\Component\ExpressionLanguage\ExpressionLanguage;
 
 /**
  * Class FireflyServiceProvider.
  *
- * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 class FireflyServiceProvider extends ServiceProvider
 {
@@ -88,90 +92,67 @@ class FireflyServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        \Validator::resolver(
-            static function ($translator, $data, $rules, $messages) {
-                return new FireflyValidator($translator, $data, $rules, $messages);
-            }
+        Validator::resolver(
+            static fn ($translator, $data, $rules, $messages): FireflyValidator => new FireflyValidator($translator, $data, $rules, $messages)
         );
     }
 
     /**
      * Register stuff.
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
+    #[Override]
     public function register(): void
     {
         $this->app->bind(
             'preferences',
-            static function () {
-                return new Preferences();
-            }
+            static fn (): Preferences => new Preferences()
         );
 
         $this->app->bind(
             'fireflyconfig',
-            static function () {
-                return new FireflyConfig();
-            }
+            static fn (): FireflyConfig => new FireflyConfig()
         );
         $this->app->bind(
             'navigation',
-            static function () {
-                return new Navigation();
-            }
+            static fn (): Navigation => new Navigation()
         );
         $this->app->bind(
             'amount',
-            static function () {
-                return new Amount();
-            }
+            static fn (): Amount => new Amount()
         );
 
         $this->app->bind(
             'steam',
-            static function () {
-                return new Steam();
-            }
+            static fn (): Steam => new Steam()
         );
         $this->app->bind(
             'balance',
-            static function () {
-                return new Balance();
-            }
+            static fn (): Balance => new Balance()
         );
         $this->app->bind(
             'expandedform',
-            static function () {
-                return new ExpandedForm();
-            }
+            static fn (): ExpandedForm => new ExpandedForm()
         );
 
         $this->app->bind(
             'accountform',
-            static function () {
-                return new AccountForm();
-            }
+            static fn (): AccountForm => new AccountForm()
         );
         $this->app->bind(
             'currencyform',
-            static function () {
-                return new CurrencyForm();
-            }
+            static fn (): CurrencyForm => new CurrencyForm()
         );
 
         $this->app->bind(
             'piggybankform',
-            static function () {
-                return new PiggyBankForm();
-            }
+            static fn (): PiggyBankForm => new PiggyBankForm()
         );
 
         $this->app->bind(
             'ruleform',
-            static function () {
-                return new RuleForm();
-            }
+            static fn (): RuleForm => new RuleForm()
         );
 
         // chart generator:
@@ -184,8 +165,7 @@ class FireflyServiceProvider extends ServiceProvider
         $this->app->bind(ALERepositoryInterface::class, ALERepository::class);
 
         $this->app->bind(
-            ObjectGroupRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): ObjectGroupRepositoryInterface {
                 /** @var ObjectGroupRepository $repository */
                 $repository = app(ObjectGroupRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -197,8 +177,19 @@ class FireflyServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
-            WebhookRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): PeriodStatisticRepositoryInterface {
+                /** @var PeriodStatisticRepository $repository */
+                $repository = app(PeriodStatisticRepository::class);
+                if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
+                    $repository->setUser(auth()->user());
+                }
+
+                return $repository;
+            }
+        );
+
+        $this->app->bind(
+            static function (Application $app): WebhookRepositoryInterface {
                 /** @var WebhookRepository $repository */
                 $repository = app(WebhookRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -211,8 +202,7 @@ class FireflyServiceProvider extends ServiceProvider
 
         // rule expression language
         $this->app->singleton(
-            ExpressionLanguage::class,
-            static function () {
+            static function (): ExpressionLanguage {
                 $expressionLanguage = new ExpressionLanguage();
                 $expressionLanguage->registerProvider(new ActionExpressionLanguageProvider());
 
@@ -221,8 +211,7 @@ class FireflyServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
-            RuleEngineInterface::class,
-            static function (Application $app) {
+            static function (Application $app): RuleEngineInterface {
                 /** @var SearchRuleEngine $engine */
                 $engine = app(SearchRuleEngine::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -234,8 +223,7 @@ class FireflyServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
-            UserGroupRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): UserGroupRepositoryInterface {
                 /** @var UserGroupRepository $repository */
                 $repository = app(UserGroupRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)

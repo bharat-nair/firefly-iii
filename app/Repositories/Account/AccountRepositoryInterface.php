@@ -24,18 +24,27 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Account;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Location;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface AccountRepositoryInterface.
+ *
+ * @method setUserGroup(UserGroup $group)
+ * @method getUserGroup()
+ * @method getUser()
+ * @method checkUserGroupAccess(UserRoleEnum $role)
+ * @method setUser(null|Authenticatable|User $user)
+ * @method setUserGroupById(int $userGroupId)
  */
 interface AccountRepositoryInterface
 {
@@ -61,6 +70,8 @@ interface AccountRepositoryInterface
     public function findByIbanNull(string $iban, array $types): ?Account;
 
     public function findByName(string $name, array $types): ?Account;
+
+    public function getAccountBalances(Account $account): Collection;
 
     public function getAccountCurrency(Account $account): ?TransactionCurrency;
 
@@ -106,7 +117,7 @@ interface AccountRepositoryInterface
     /**
      * Returns the amount of the opening balance for this account.
      */
-    public function getOpeningBalanceAmount(Account $account): ?string;
+    public function getOpeningBalanceAmount(Account $account, bool $convertToPrimary): ?string;
 
     /**
      * Return date of opening balance as string or null.
@@ -138,6 +149,8 @@ interface AccountRepositoryInterface
      */
     public function oldestJournalDate(Account $account): ?Carbon;
 
+    public function periodCollection(Account $account, Carbon $start, Carbon $end): array;
+
     /**
      * Reset order types of the mentioned accounts.
      */
@@ -146,8 +159,6 @@ interface AccountRepositoryInterface
     public function searchAccount(string $query, array $types, int $limit): Collection;
 
     public function searchAccountNr(string $query, array $types, int $limit): Collection;
-
-    public function setUser(null|Authenticatable|User $user): void;
 
     public function store(array $data): Account;
 

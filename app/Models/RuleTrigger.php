@@ -28,21 +28,9 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * @mixin IdeHelperRuleTrigger
- */
 class RuleTrigger extends Model
 {
     use ReturnsIntegerIdTrait;
-
-    protected $casts
-                        = [
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'active'          => 'boolean',
-            'order'           => 'int',
-            'stop_processing' => 'boolean',
-        ];
 
     protected $fillable = ['rule_id', 'trigger_type', 'trigger_value', 'order', 'active', 'stop_processing'];
 
@@ -51,17 +39,28 @@ class RuleTrigger extends Model
         return $this->belongsTo(Rule::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'      => 'datetime',
+            'updated_at'      => 'datetime',
+            'active'          => 'boolean',
+            'order'           => 'int',
+            'stop_processing' => 'boolean',
+        ];
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function ruleId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

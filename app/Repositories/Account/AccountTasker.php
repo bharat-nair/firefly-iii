@@ -24,21 +24,23 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Account;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\TransactionType;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Support\Facades\Steam;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class AccountTasker.
  */
-class AccountTasker implements AccountTaskerInterface
+class AccountTasker implements AccountTaskerInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * @throws FireflyException
@@ -46,14 +48,18 @@ class AccountTasker implements AccountTaskerInterface
     public function getAccountReport(Collection $accounts, Carbon $start, Carbon $end): array
     {
         $yesterday       = clone $start;
-        $yesterday->subDay();
-        $startSet        = app('steam')->balancesByAccounts($accounts, $yesterday);
-        $endSet          = app('steam')->balancesByAccounts($accounts, $end);
-        app('log')->debug('Start of accountreport');
+        $yesterday->subDay()->endOfDay(); // exactly up until $start but NOT including.
+        $end->endOfDay();                 // needs to be end of day to be correct.
+        Log::debug(sprintf('getAccountReport: accountsBalancesInRange("%s", "%s")', $yesterday->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
+        [
+            $startSet,
+            $endSet,
+        ]                = Steam::accountsBalancesInRange($accounts, $yesterday, $end);
+        Log::debug('Start of accountreport');
 
         /** @var AccountRepositoryInterface $repository */
         $repository      = app(AccountRepositoryInterface::class);
-        $defaultCurrency = app('amount')->getDefaultCurrencyByUserGroup($this->user->userGroup);
+        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
 
         $return          = [
             'accounts' => [],
@@ -63,7 +69,7 @@ class AccountTasker implements AccountTaskerInterface
         /** @var Account $account */
         foreach ($accounts as $account) {
             $id                                     = $account->id;
-            $currency                               = $repository->getAccountCurrency($account) ?? $defaultCurrency;
+            $currency                               = $repository->getAccountCurrency($account) ?? $primaryCurrency;
             $return['sums'][$currency->id] ??= [
                 'start'                   => '0',
                 'end'                     => '0',
@@ -86,16 +92,16 @@ class AccountTasker implements AccountTaskerInterface
 
             // get first journal date:
             $first                                  = $repository->oldestJournal($account);
-            $entry['start_balance']                 = $startSet[$account->id] ?? '0';
-            $entry['end_balance']                   = $endSet[$account->id] ?? '0';
+            $entry['start_balance']                 = $startSet[$account->id]['balance'] ?? '0';
+            $entry['end_balance']                   = $endSet[$account->id]['balance'] ?? '0';
 
             // first journal exists, and is on start, then this is the actual opening balance:
-            if (null !== $first && $first->date->isSameDay($start) && TransactionType::OPENING_BALANCE === $first->transactionType->type) {
-                app('log')->debug(sprintf('Date of first journal for %s is %s', $account->name, $first->date->format('Y-m-d')));
+            if (null !== $first && $first->date->isSameDay($yesterday) && TransactionTypeEnum::OPENING_BALANCE->value === $first->transactionType->type) {
+                Log::debug(sprintf('Date of first journal for %s is %s', $account->name, $first->date->format('Y-m-d')));
                 $entry['start_balance'] = $first->transactions()->where('account_id', $account->id)->first()->amount;
-                app('log')->debug(sprintf('Account %s was opened on %s, so opening balance is %f', $account->name, $start->format('Y-m-d'), $entry['start_balance']));
+                Log::debug(sprintf('Account %s was opened on %s, so opening balance is %f', $account->name, $yesterday->format('Y-m-d'), $entry['start_balance']));
             }
-            $return['sums'][$currency->id]['start'] = bcadd($return['sums'][$currency->id]['start'], $entry['start_balance']);
+            $return['sums'][$currency->id]['start'] = bcadd($return['sums'][$currency->id]['start'], (string) $entry['start_balance']);
             $return['sums'][$currency->id]['end']   = bcadd($return['sums'][$currency->id]['end'], $entry['end_balance']);
             $return['accounts'][$id]                = $entry;
         }
@@ -121,7 +127,7 @@ class AccountTasker implements AccountTaskerInterface
 
         $collector->setSourceAccounts($accounts)->setRange($start, $end);
         $collector->excludeDestinationAccounts($accounts);
-        $collector->setTypes([TransactionType::WITHDRAWAL, TransactionType::TRANSFER])->withAccountInformation();
+        $collector->setTypes([TransactionTypeEnum::WITHDRAWAL->value, TransactionTypeEnum::TRANSFER->value])->withAccountInformation();
         $journals  = $collector->getExtractedJournals();
 
         $report    = $this->groupExpenseByDestination($journals);
@@ -130,7 +136,7 @@ class AccountTasker implements AccountTaskerInterface
         // Obtain a list of columns
         $sum       = [];
         foreach ($report['accounts'] as $accountId => $row) {
-            $sum[$accountId] = (float)$row['sum']; // intentional float
+            $sum[$accountId] = (float) $row['sum']; // intentional float
         }
 
         array_multisort($sum, SORT_ASC, $report['accounts']);
@@ -138,16 +144,13 @@ class AccountTasker implements AccountTaskerInterface
         return $report;
     }
 
-    /**
-     * @throws FireflyException
-     */
     private function groupExpenseByDestination(array $array): array
     {
-        $defaultCurrency = app('amount')->getDefaultCurrencyByUserGroup($this->user->userGroup);
+        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
 
         /** @var CurrencyRepositoryInterface $currencyRepos */
         $currencyRepos   = app(CurrencyRepositoryInterface::class);
-        $currencies      = [$defaultCurrency->id => $defaultCurrency];
+        $currencies      = [$primaryCurrency->id => $primaryCurrency];
         $report          = [
             'accounts' => [],
             'sums'     => [],
@@ -155,8 +158,8 @@ class AccountTasker implements AccountTaskerInterface
 
         /** @var array $journal */
         foreach ($array as $journal) {
-            $sourceId                        = (int)$journal['destination_account_id'];
-            $currencyId                      = (int)$journal['currency_id'];
+            $sourceId                        = (int) $journal['destination_account_id'];
+            $currencyId                      = (int) $journal['currency_id'];
             $key                             = sprintf('%s-%s', $sourceId, $currencyId);
             $currencies[$currencyId]  ??= $currencyRepos->find($currencyId);
             $report['accounts'][$key] ??= [
@@ -171,9 +174,9 @@ class AccountTasker implements AccountTaskerInterface
                 'currency_code'           => $currencies[$currencyId]->code,
                 'currency_decimal_places' => $currencies[$currencyId]->decimal_places,
             ];
-            $report['accounts'][$key]['sum'] = bcadd($report['accounts'][$key]['sum'], $journal['amount']);
+            $report['accounts'][$key]['sum'] = bcadd($report['accounts'][$key]['sum'], (string) $journal['amount']);
 
-            app('log')->debug(sprintf('Sum for %s is now %s', $journal['destination_account_name'], $report['accounts'][$key]['sum']));
+            Log::debug(sprintf('Sum for %s is now %s', $journal['destination_account_name'], $report['accounts'][$key]['sum']));
 
             ++$report['accounts'][$key]['count'];
         }
@@ -181,7 +184,7 @@ class AccountTasker implements AccountTaskerInterface
         // do averages and sums.
         foreach (array_keys($report['accounts']) as $key) {
             if ($report['accounts'][$key]['count'] > 1) {
-                $report['accounts'][$key]['average'] = bcdiv($report['accounts'][$key]['sum'], (string)$report['accounts'][$key]['count']);
+                $report['accounts'][$key]['average'] = bcdiv($report['accounts'][$key]['sum'], (string) $report['accounts'][$key]['count']);
             }
             $currencyId                         = $report['accounts'][$key]['currency_id'];
             $report['sums'][$currencyId] ??= [
@@ -211,14 +214,14 @@ class AccountTasker implements AccountTaskerInterface
         $collector = app(GroupCollectorInterface::class);
         $collector->setDestinationAccounts($accounts)->setRange($start, $end);
         $collector->excludeSourceAccounts($accounts);
-        $collector->setTypes([TransactionType::DEPOSIT, TransactionType::TRANSFER])->withAccountInformation();
+        $collector->setTypes([TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::TRANSFER->value])->withAccountInformation();
         $report    = $this->groupIncomeBySource($collector->getExtractedJournals());
 
         // sort the result
         // Obtain a list of columns
         $sum       = [];
         foreach ($report['accounts'] as $accountId => $row) {
-            $sum[$accountId] = (float)$row['sum']; // intentional float
+            $sum[$accountId] = (float) $row['sum']; // intentional float
         }
 
         array_multisort($sum, SORT_DESC, $report['accounts']);
@@ -226,16 +229,13 @@ class AccountTasker implements AccountTaskerInterface
         return $report;
     }
 
-    /**
-     * @throws FireflyException
-     */
     private function groupIncomeBySource(array $array): array
     {
-        $defaultCurrency = app('amount')->getDefaultCurrencyByUserGroup($this->user->userGroup);
+        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
 
         /** @var CurrencyRepositoryInterface $currencyRepos */
         $currencyRepos   = app(CurrencyRepositoryInterface::class);
-        $currencies      = [$defaultCurrency->id => $defaultCurrency];
+        $currencies      = [$primaryCurrency->id => $primaryCurrency];
         $report          = [
             'accounts' => [],
             'sums'     => [],
@@ -243,8 +243,8 @@ class AccountTasker implements AccountTaskerInterface
 
         /** @var array $journal */
         foreach ($array as $journal) {
-            $sourceId                        = (int)$journal['source_account_id'];
-            $currencyId                      = (int)$journal['currency_id'];
+            $sourceId                        = (int) $journal['source_account_id'];
+            $currencyId                      = (int) $journal['currency_id'];
             $key                             = sprintf('%s-%s', $sourceId, $currencyId);
             if (!array_key_exists($key, $report['accounts'])) {
                 $currencies[$currencyId] ??= $currencyRepos->find($currencyId);
@@ -261,14 +261,14 @@ class AccountTasker implements AccountTaskerInterface
                     'currency_decimal_places' => $currencies[$currencyId]->decimal_places,
                 ];
             }
-            $report['accounts'][$key]['sum'] = bcadd($report['accounts'][$key]['sum'], bcmul($journal['amount'], '-1'));
+            $report['accounts'][$key]['sum'] = bcadd($report['accounts'][$key]['sum'], bcmul((string) $journal['amount'], '-1'));
             ++$report['accounts'][$key]['count'];
         }
 
         // do averages and sums.
         foreach (array_keys($report['accounts']) as $key) {
             if ($report['accounts'][$key]['count'] > 1) {
-                $report['accounts'][$key]['average'] = bcdiv($report['accounts'][$key]['sum'], (string)$report['accounts'][$key]['count']);
+                $report['accounts'][$key]['average'] = bcdiv($report['accounts'][$key]['sum'], (string) $report['accounts'][$key]['count']);
             }
             $currencyId                         = $report['accounts'][$key]['currency_id'];
             $report['sums'][$currencyId] ??= [
@@ -283,12 +283,5 @@ class AccountTasker implements AccountTaskerInterface
         }
 
         return $report;
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 }

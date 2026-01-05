@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AbstractTransformer.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Transformers;
 
+use Deprecated;
 use League\Fractal\TransformerAbstract;
 use Symfony\Component\HttpFoundation\ParameterBag;
 
@@ -33,11 +35,13 @@ abstract class AbstractTransformer extends TransformerAbstract
 {
     protected ParameterBag $parameters;
 
+    #[Deprecated]
     final public function getParameters(): ParameterBag
     {
         return $this->parameters;
     }
 
+    #[Deprecated]
     final public function setParameters(ParameterBag $parameters): void
     {
         $this->parameters = $parameters;

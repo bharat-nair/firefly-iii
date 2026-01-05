@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DestroyedGroupEventHandler.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -27,26 +28,43 @@ use FireflyIII\Enums\WebhookTrigger;
 use FireflyIII\Events\DestroyedTransactionGroup;
 use FireflyIII\Events\RequestedSendWebhookMessages;
 use FireflyIII\Generator\Webhook\MessageGeneratorInterface;
+use FireflyIII\Support\Models\AccountBalanceCalculator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class DestroyedGroupEventHandler
  */
 class DestroyedGroupEventHandler
 {
-    public function triggerWebhooks(DestroyedTransactionGroup $destroyedGroupEvent): void
+    public function runAllHandlers(DestroyedTransactionGroup $event): void
     {
-        app('log')->debug('DestroyedTransactionGroup:triggerWebhooks');
+        $this->triggerWebhooks($event);
+        $this->updateRunningBalance($event);
+    }
+
+    private function triggerWebhooks(DestroyedTransactionGroup $destroyedGroupEvent): void
+    {
+        Log::debug('DestroyedTransactionGroup:triggerWebhooks');
         $group  = $destroyedGroupEvent->transactionGroup;
         $user   = $group->user;
 
         /** @var MessageGeneratorInterface $engine */
         $engine = app(MessageGeneratorInterface::class);
         $engine->setUser($user);
-        $engine->setObjects(new Collection([$group]));
-        $engine->setTrigger(WebhookTrigger::DESTROY_TRANSACTION->value);
+        $engine->setObjects(new Collection()->push($group));
+        $engine->setTrigger(WebhookTrigger::DESTROY_TRANSACTION);
         $engine->generateMessages();
-
+        Log::debug(sprintf('send event RequestedSendWebhookMessages from %s', __METHOD__));
         event(new RequestedSendWebhookMessages());
+    }
+
+    private function updateRunningBalance(DestroyedTransactionGroup $event): void
+    {
+        Log::debug(__METHOD__);
+        $group = $event->transactionGroup;
+        foreach ($group->transactionJournals as $journal) {
+            AccountBalanceCalculator::recalculateForJournal($journal);
+        }
     }
 }

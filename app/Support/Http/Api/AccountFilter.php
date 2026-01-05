@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AccountFilter.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,70 +24,92 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Http\Api;
 
-use FireflyIII\Models\AccountType;
+use FireflyIII\Enums\AccountTypeEnum;
 
 /**
  * Trait AccountFilter
  */
 trait AccountFilter
 {
-    protected array $types = [
-        'all'                        => [
-            AccountType::DEFAULT,
-            AccountType::CASH,
-            AccountType::ASSET,
-            AccountType::EXPENSE,
-            AccountType::REVENUE,
-            AccountType::INITIAL_BALANCE,
-            AccountType::BENEFICIARY,
-            AccountType::IMPORT,
-            AccountType::RECONCILIATION,
-            AccountType::LOAN,
-            AccountType::DEBT,
-            AccountType::MORTGAGE,
-        ],
-        'asset'                      => [AccountType::DEFAULT, AccountType::ASSET],
-        'cash'                       => [AccountType::CASH],
-        'expense'                    => [AccountType::EXPENSE, AccountType::BENEFICIARY],
-        'revenue'                    => [AccountType::REVENUE],
-        'special'                    => [AccountType::CASH, AccountType::INITIAL_BALANCE, AccountType::IMPORT, AccountType::RECONCILIATION],
-        'hidden'                     => [AccountType::INITIAL_BALANCE, AccountType::IMPORT, AccountType::RECONCILIATION],
-        'liability'                  => [AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE, AccountType::CREDITCARD],
-        'liabilities'                => [AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE, AccountType::CREDITCARD],
-        AccountType::DEFAULT         => [AccountType::DEFAULT],
-        AccountType::CASH            => [AccountType::CASH],
-        AccountType::ASSET           => [AccountType::ASSET],
-        AccountType::EXPENSE         => [AccountType::EXPENSE],
-        AccountType::REVENUE         => [AccountType::REVENUE],
-        AccountType::INITIAL_BALANCE => [AccountType::INITIAL_BALANCE],
-        AccountType::BENEFICIARY     => [AccountType::BENEFICIARY],
-        AccountType::IMPORT          => [AccountType::IMPORT],
-        AccountType::RECONCILIATION  => [AccountType::RECONCILIATION],
-        AccountType::LOAN            => [AccountType::LOAN],
-        AccountType::MORTGAGE        => [AccountType::MORTGAGE],
-        AccountType::DEBT            => [AccountType::DEBT],
-        AccountType::CREDITCARD      => [AccountType::CREDITCARD],
-        'default account'            => [AccountType::DEFAULT],
-        'cash account'               => [AccountType::CASH],
-        'asset account'              => [AccountType::ASSET],
-        'expense account'            => [AccountType::EXPENSE],
-        'revenue account'            => [AccountType::REVENUE],
-        'initial balance account'    => [AccountType::INITIAL_BALANCE],
-        'reconciliation'             => [AccountType::RECONCILIATION],
-        'loan'                       => [AccountType::LOAN],
-        'mortgage'                   => [AccountType::MORTGAGE],
-        'debt'                       => [AccountType::DEBT],
-        'credit card'                => [AccountType::CREDITCARD],
-        'credit-card'                => [AccountType::CREDITCARD],
-        'creditcard'                 => [AccountType::CREDITCARD],
-        'cc'                         => [AccountType::CREDITCARD],
-    ];
+    protected array $types
+        = [
+            'all'                                    => [
+                AccountTypeEnum::DEFAULT->value,
+                AccountTypeEnum::CASH->value,
+                AccountTypeEnum::ASSET->value,
+                AccountTypeEnum::EXPENSE->value,
+                AccountTypeEnum::REVENUE->value,
+                AccountTypeEnum::INITIAL_BALANCE->value,
+                AccountTypeEnum::BENEFICIARY->value,
+                AccountTypeEnum::IMPORT->value,
+                AccountTypeEnum::RECONCILIATION->value,
+                AccountTypeEnum::LOAN->value,
+                AccountTypeEnum::DEBT->value,
+                AccountTypeEnum::MORTGAGE->value,
+            ],
+            'normal'                                 => [
+                AccountTypeEnum::ASSET->value,
+                AccountTypeEnum::EXPENSE->value,
+                AccountTypeEnum::REVENUE->value,
+                AccountTypeEnum::LOAN->value,
+                AccountTypeEnum::DEBT->value,
+                AccountTypeEnum::MORTGAGE->value,
+            ],
+            'asset'                                  => [AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value],
+            'cash'                                   => [AccountTypeEnum::CASH->value],
+            'expense'                                => [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::BENEFICIARY->value],
+            'revenue'                                => [AccountTypeEnum::REVENUE->value],
+            'special'                                => [AccountTypeEnum::CASH->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::RECONCILIATION->value],
+            'hidden'                                 => [AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::RECONCILIATION->value],
+            'liability'                              => [AccountTypeEnum::DEBT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::CREDITCARD->value],
+            'liabilities'                            => [AccountTypeEnum::DEBT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::CREDITCARD->value],
+            AccountTypeEnum::DEFAULT->value          => [AccountTypeEnum::DEFAULT->value],
+            AccountTypeEnum::CASH->value             => [AccountTypeEnum::CASH->value],
+            AccountTypeEnum::ASSET->value            => [AccountTypeEnum::ASSET->value],
+            AccountTypeEnum::EXPENSE->value          => [AccountTypeEnum::EXPENSE->value],
+            AccountTypeEnum::REVENUE->value          => [AccountTypeEnum::REVENUE->value],
+            AccountTypeEnum::INITIAL_BALANCE->value  => [AccountTypeEnum::INITIAL_BALANCE->value],
+            AccountTypeEnum::BENEFICIARY->value      => [AccountTypeEnum::BENEFICIARY->value],
+            AccountTypeEnum::IMPORT->value           => [AccountTypeEnum::IMPORT->value],
+            AccountTypeEnum::RECONCILIATION->value   => [AccountTypeEnum::RECONCILIATION->value],
+            AccountTypeEnum::LOAN->value             => [AccountTypeEnum::LOAN->value],
+            AccountTypeEnum::MORTGAGE->value         => [AccountTypeEnum::MORTGAGE->value],
+            AccountTypeEnum::DEBT->value             => [AccountTypeEnum::DEBT->value],
+            AccountTypeEnum::CREDITCARD->value       => [AccountTypeEnum::CREDITCARD->value],
+            AccountTypeEnum::LIABILITY_CREDIT->value => [AccountTypeEnum::LIABILITY_CREDIT->value],
+            'default account'                        => [AccountTypeEnum::DEFAULT->value],
+            'cash account'                           => [AccountTypeEnum::CASH->value],
+            'asset account'                          => [AccountTypeEnum::ASSET->value],
+            'expense account'                        => [AccountTypeEnum::EXPENSE->value],
+            'revenue account'                        => [AccountTypeEnum::REVENUE->value],
+            'initial balance account'                => [AccountTypeEnum::INITIAL_BALANCE->value],
+            'reconciliation'                         => [AccountTypeEnum::RECONCILIATION->value],
+            'loan'                                   => [AccountTypeEnum::LOAN->value],
+            'mortgage'                               => [AccountTypeEnum::MORTGAGE->value],
+            'debt'                                   => [AccountTypeEnum::DEBT->value],
+            'credit card'                            => [AccountTypeEnum::CREDITCARD->value],
+            'credit-card'                            => [AccountTypeEnum::CREDITCARD->value],
+            'creditcard'                             => [AccountTypeEnum::CREDITCARD->value],
+            'cc'                                     => [AccountTypeEnum::CREDITCARD->value],
+        ];
 
     /**
      * All the available types.
      */
     protected function mapAccountTypes(string $type): array
     {
-        return $this->types[$type] ?? $this->types['all'];
+        $return = [];
+        $parts  = explode(',', $type);
+        foreach ($parts as $part) {
+            if (array_key_exists($part, $this->types)) {
+                $return = array_merge($return, $this->types[$part]);
+            }
+        }
+
+        if (0 === count($return)) {
+            return $this->types['normal'];
+        }
+
+        return $return;
     }
 }

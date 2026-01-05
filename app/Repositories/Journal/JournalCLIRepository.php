@@ -1,4 +1,5 @@
 <?php
+
 /**
  * JournalCLIRepository.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,17 +25,22 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Journal;
 
 use Carbon\Carbon;
+use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Support\CacheProperties;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
  * Class JournalCLIRepository
  */
-class JournalCLIRepository implements JournalCLIRepositoryInterface
+class JournalCLIRepository implements JournalCLIRepositoryInterface, UserGroupInterface
 {
+    use UserGroupTrait;
+
     /**
      * Get all transaction journals with a specific type, regardless of user.
      */
@@ -52,11 +58,14 @@ class JournalCLIRepository implements JournalCLIRepositoryInterface
      */
     public function getJournalBudgetId(TransactionJournal $journal): int
     {
-        $budget = $journal->budgets()->first();
+        $budget      = $journal->budgets()->first();
         if (null !== $budget) {
             return $budget->id;
         }
-        $budget = $journal->transactions()->first()->budgets()->first();
+
+        /** @var null|Transaction $transaction */
+        $transaction = $journal->transactions()->first();
+        $budget      = $transaction?->budgets()->first();
         if (null !== $budget) {
             return $budget->id;
         }
@@ -69,11 +78,14 @@ class JournalCLIRepository implements JournalCLIRepositoryInterface
      */
     public function getJournalCategoryId(TransactionJournal $journal): int
     {
-        $category = $journal->categories()->first();
+        $category    = $journal->categories()->first();
         if (null !== $category) {
             return $category->id;
         }
-        $category = $journal->transactions()->first()->categories()->first();
+
+        /** @var null|Transaction $transaction */
+        $transaction = $journal->transactions()->first();
+        $category    = $transaction?->categories()->first();
         if (null !== $category) {
             return $category->id;
         }
@@ -142,7 +154,7 @@ class JournalCLIRepository implements JournalCLIRepositoryInterface
         }
 
         // return when something else:
-        $return = (string)$value;
+        $return = (string) $value;
         $cache->store($return);
 
         return $return;
@@ -154,11 +166,9 @@ class JournalCLIRepository implements JournalCLIRepositoryInterface
     public function getNoteText(TransactionJournal $journal): ?string
     {
         $note = $journal->notes()->first();
-        if (null === $note) {
-            return null;
-        }
 
-        return $note->text;
+        return $note?->text;
+
     }
 
     /**
@@ -170,13 +180,13 @@ class JournalCLIRepository implements JournalCLIRepositoryInterface
         $query      = TransactionJournal::leftJoin('transactions', 'transaction_journals.id', '=', 'transactions.transaction_journal_id')
             ->groupBy('transaction_journals.id')
         ;
-        $result     = $query->get(['transaction_journals.id as id', \DB::raw('count(transactions.id) as transaction_count')]); // @phpstan-ignore-line
+        $result     = $query->get(['transaction_journals.id as id', DB::raw('count(transactions.id) as transaction_count')]);
         $journalIds = [];
 
-        /** @var \stdClass $row */
+        /** @var stdClass $row */
         foreach ($result as $row) {
-            if ((int)$row->transaction_count > 2) {
-                $journalIds[] = (int)$row->id;
+            if ((int) $row->transaction_count > 2) {
+                $journalIds[] = (int) $row->id;
             }
         }
         $journalIds = array_unique($journalIds);
@@ -192,10 +202,5 @@ class JournalCLIRepository implements JournalCLIRepositoryInterface
     public function getTags(TransactionJournal $journal): array
     {
         return $journal->tags()->get()->pluck('tag')->toArray();
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        // empty
     }
 }

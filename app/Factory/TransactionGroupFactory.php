@@ -1,4 +1,5 @@
 <?php
+
 /**
  * TransactionGroupFactory.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -26,15 +27,18 @@ namespace FireflyIII\Factory;
 use FireflyIII\Exceptions\DuplicateTransactionException;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionGroup;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class TransactionGroupFactory
  */
 class TransactionGroupFactory
 {
-    private TransactionJournalFactory $journalFactory;
-    private User                      $user;
+    private readonly TransactionJournalFactory $journalFactory;
+    private User                               $user;
+    private UserGroup                          $userGroup;
 
     /**
      * TransactionGroupFactory constructor.
@@ -52,14 +56,15 @@ class TransactionGroupFactory
      */
     public function create(array $data): TransactionGroup
     {
-        app('log')->debug('Now in TransactionGroupFactory::create()');
-        $this->journalFactory->setUser($this->user);
+        Log::debug('Now in TransactionGroupFactory::create()');
+        $this->journalFactory->setUser($data['user']);
+        $this->journalFactory->setUserGroup($data['user_group']);
         $this->journalFactory->setErrorOnHash($data['error_if_duplicate_hash'] ?? false);
 
         try {
             $collection = $this->journalFactory->create($data);
         } catch (DuplicateTransactionException $e) {
-            app('log')->warning('GroupFactory::create() caught journalFactory::create() with a duplicate!');
+            Log::warning('GroupFactory::create() caught journalFactory::create() with a duplicate!');
 
             throw new DuplicateTransactionException($e->getMessage(), 0, $e);
         }
@@ -67,7 +72,7 @@ class TransactionGroupFactory
         $title        = '' === $title ? null : $title;
 
         if (null !== $title) {
-            $title = substr($title, 0, 1000);
+            $title = substr((string) $title, 0, 1000);
         }
         if (0 === $collection->count()) {
             throw new FireflyException('Created zero transaction journals.');
@@ -75,7 +80,7 @@ class TransactionGroupFactory
 
         $group        = new TransactionGroup();
         $group->user()->associate($this->user);
-        $group->userGroup()->associate($data['user_group'] ?? $this->user->userGroup);
+        $group->userGroup()->associate($this->userGroup);
         $group->title = $title;
         $group->save();
 
@@ -89,6 +94,12 @@ class TransactionGroupFactory
      */
     public function setUser(User $user): void
     {
-        $this->user = $user;
+        $this->user      = $user;
+        $this->userGroup = $user->userGroup;
+    }
+
+    public function setUserGroup(UserGroup $userGroup): void
+    {
+        $this->userGroup = $userGroup;
     }
 }

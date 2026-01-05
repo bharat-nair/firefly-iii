@@ -24,10 +24,14 @@ declare(strict_types=1);
 namespace FireflyIII\Models;
 
 use Carbon\Carbon;
+use FireflyIII\Casts\SeparateTimezoneCaster;
+use FireflyIII\Enums\TransactionTypeEnum;
+use FireflyIII\Handlers\Observer\TransactionJournalObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -40,29 +44,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * @mixin IdeHelperTransactionJournal
+ * @method        EloquentBuilder|static before()
+ * @method        EloquentBuilder|static after()
+ * @method static EloquentBuilder|static query()
+ *
+ * @property TransactionGroup $transactionGroup
  */
+#[ObservedBy([TransactionJournalObserver::class])]
 class TransactionJournal extends Model
 {
     use HasFactory;
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                      = [
-            'created_at'    => 'datetime',
-            'updated_at'    => 'datetime',
-            'deleted_at'    => 'datetime',
-            'date'          => 'datetime',
-            'interest_date' => 'date',
-            'book_date'     => 'date',
-            'process_date'  => 'date',
-            'order'         => 'int',
-            'tag_count'     => 'int',
-            'encrypted'     => 'boolean',
-            'completed'     => 'boolean',
-        ];
 
     protected $fillable
                       = [
@@ -76,6 +70,7 @@ class TransactionJournal extends Model
             'completed',
             'order',
             'date',
+            'date_tz',
         ];
 
     protected $hidden = ['encrypted'];
@@ -141,7 +136,7 @@ class TransactionJournal extends Model
     public function isTransfer(): bool
     {
         if (null !== $this->transaction_type_type) {
-            return TransactionType::TRANSFER === $this->transaction_type_type;
+            return TransactionTypeEnum::TRANSFER->value === $this->transaction_type_type;
         }
 
         return $this->transactionType->isTransfer();
@@ -167,37 +162,12 @@ class TransactionJournal extends Model
 
     public function scopeAfter(EloquentBuilder $query, Carbon $date): EloquentBuilder
     {
-        return $query->where('transaction_journals.date', '>=', $date->format('Y-m-d 00:00:00'));
+        return $query->where('transaction_journals.date', '>=', $date->format('Y-m-d H:i:s'));
     }
 
     public function scopeBefore(EloquentBuilder $query, Carbon $date): EloquentBuilder
     {
-        return $query->where('transaction_journals.date', '<=', $date->format('Y-m-d 00:00:00'));
-    }
-
-    public function scopeTransactionTypes(EloquentBuilder $query, array $types): void
-    {
-        if (!self::isJoined($query, 'transaction_types')) {
-            $query->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id');
-        }
-        if (0 !== count($types)) {
-            $query->whereIn('transaction_types.type', $types);
-        }
-    }
-
-    /**
-     * Checks if tables are joined.
-     */
-    public static function isJoined(Builder $query, string $table): bool
-    {
-        $joins = $query->getQuery()->joins;
-        foreach ($joins as $join) {
-            if ($join->table === $table) {
-                return true;
-            }
-        }
-
-        return false;
+        return $query->where('transaction_journals.date', '<=', $date->format('Y-m-d H:i:s'));
     }
 
     public function sourceJournalLinks(): HasMany
@@ -235,17 +205,67 @@ class TransactionJournal extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    public function userGroup(): BelongsTo
+    {
+        return $this->belongsTo(UserGroup::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'date'          => SeparateTimezoneCaster::class,
+            'interest_date' => 'date',
+            'book_date'     => 'date',
+            'process_date'  => 'date',
+            'order'         => 'int',
+            'tag_count'     => 'int',
+            'encrypted'     => 'boolean',
+            'completed'     => 'boolean',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function transactionTypeId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
+    }
+
+    #[Scope]
+    protected function transactionTypes(EloquentBuilder $query, array $types): void
+    {
+        if (!self::isJoined($query, 'transaction_types')) {
+            $query->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id');
+        }
+        if (0 !== count($types)) {
+            $query->whereIn('transaction_types.type', $types);
+        }
+    }
+
+    /**
+     * Checks if tables are joined.
+     */
+    public static function isJoined(EloquentBuilder $query, string $table): bool
+    {
+        $joins = $query->getQuery()->joins;
+        foreach ($joins as $join) {
+            if ($join->table === $table) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

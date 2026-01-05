@@ -24,20 +24,31 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Category;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Category;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface CategoryRepositoryInterface.
+ *
+ * @method setUserGroup(UserGroup $group)
+ * @method getUserGroup()
+ * @method getUser()
+ * @method checkUserGroupAccess(UserRoleEnum $role)
+ * @method setUser(null|Authenticatable|User $user)
+ * @method setUserGroupById(int $userGroupId)
  */
 interface CategoryRepositoryInterface
 {
     public function categoryEndsWith(string $query, int $limit): Collection;
 
     public function categoryStartsWith(string $query, int $limit): Collection;
+
+    public function periodCollection(Category $category, Carbon $start, Carbon $end): array;
 
     public function destroy(Category $category): bool;
 
@@ -85,8 +96,6 @@ interface CategoryRepositoryInterface
     public function removeNotes(Category $category): void;
 
     public function searchCategory(string $query, int $limit): Collection;
-
-    public function setUser(null|Authenticatable|User $user): void;
 
     /**
      * @throws FireflyException

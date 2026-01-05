@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BudgetDestroyService.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Services\Internal\Destroy;
 
 use FireflyIII\Models\Budget;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class BudgetDestroyService
@@ -40,10 +42,10 @@ class BudgetDestroyService
         }
 
         // also delete all relations between categories and transaction journals:
-        \DB::table('budget_transaction_journal')->where('budget_id', $budget->id)->delete();
+        DB::table('budget_transaction_journal')->where('budget_id', $budget->id)->delete();
 
         // also delete all relations between categories and transactions:
-        \DB::table('budget_transaction')->where('budget_id', $budget->id)->delete();
+        DB::table('budget_transaction')->where('budget_id', $budget->id)->delete();
 
         // also delete all budget limits
         foreach ($budget->budgetlimits()->get() as $limit) {

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * MonthReportGenerator.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -30,7 +31,10 @@ use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
+use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Class MonthReportGenerator.
@@ -50,7 +54,9 @@ class MonthReportGenerator implements ReportGeneratorInterface
     {
         $auditData   = [];
         $dayBefore   = clone $this->start;
-        $dayBefore->subDay();
+
+        // set date to subday + end-of-day for account balance. so it is at $date 23:59:59
+        $dayBefore->subDay()->endOfDay();
 
         /** @var Account $account */
         foreach ($this->accounts as $account) {
@@ -81,6 +87,9 @@ class MonthReportGenerator implements ReportGeneratorInterface
             'create_date',
             'update_date',
 
+            // more
+            'notes',
+
             // date fields.
             'interest_date',
             'book_date',
@@ -91,13 +100,13 @@ class MonthReportGenerator implements ReportGeneratorInterface
         ];
 
         try {
-            $result = view('reports.audit.report', compact('reportType', 'accountIds', 'auditData', 'hideable', 'defaultShow'))
+            $result = view('reports.audit.report', ['reportType' => $reportType, 'accountIds' => $accountIds, 'auditData' => $auditData, 'hideable' => $hideable, 'defaultShow' => $defaultShow])
                 ->with('start', $this->start)->with('end', $this->end)->with('accounts', $this->accounts)
                 ->render()
             ;
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Cannot render reports.audit.report: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+        } catch (Throwable $e) {
+            Log::error(sprintf('Cannot render reports.audit.report: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = sprintf('Could not render report view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);
@@ -123,15 +132,20 @@ class MonthReportGenerator implements ReportGeneratorInterface
 
         /** @var GroupCollectorInterface $collector */
         $collector         = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]))->setRange($this->start, $this->end)->withAccountInformation()
-            ->withBudgetInformation()->withCategoryInformation()->withBillInformation()
+        $collector->setAccounts(new Collection()->push($account))->setRange($this->start, $this->end)->withAccountInformation()
+            ->withBudgetInformation()->withCategoryInformation()->withBillInformation()->withNotes()
         ;
         $journals          = $collector->getExtractedJournals();
         $journals          = array_reverse($journals, true);
-        $dayBeforeBalance  = app('steam')->balance($account, $date);
-        $startBalance      = $dayBeforeBalance;
-        $defaultCurrency   = app('amount')->getDefaultCurrencyByUserGroup($account->user->userGroup);
-        $currency          = $accountRepository->getAccountCurrency($account) ?? $defaultCurrency;
+
+        Log::debug(sprintf('getAuditReport: Call accountsBalancesOptimized with date/time "%s"', $date->toIso8601String()));
+        // 2025-10-08 replace with accountsBalancesOptimized.
+        // $dayBeforeBalance  = Steam::finalAccountBalance($account, $date);
+        $dayBeforeBalance  = Steam::accountsBalancesOptimized(new Collection()->push($account), $date)[$account->id];
+
+        $startBalance      = $dayBeforeBalance['balance'];
+        $primaryCurrency   = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
+        $currency          = $accountRepository->getAccountCurrency($account) ?? $primaryCurrency;
 
         foreach ($journals as $index => $journal) {
             $journals[$index]['balance_before'] = $startBalance;
@@ -149,7 +163,7 @@ class MonthReportGenerator implements ReportGeneratorInterface
                 }
             }
 
-            $newBalance                         = bcadd($startBalance, $transactionAmount);
+            $newBalance                         = bcadd((string) $startBalance, (string) $transactionAmount);
             $journals[$index]['balance_after']  = $newBalance;
             $startBalance                       = $newBalance;
 
@@ -162,14 +176,18 @@ class MonthReportGenerator implements ReportGeneratorInterface
             $journals[$index]['invoice_date']   = $journalRepository->getMetaDateById($journal['transaction_journal_id'], 'invoice_date');
         }
         $locale            = app('steam')->getLocale();
+        // call is correct.
+        Log::debug(sprintf('getAuditReport end: Call finalAccountBalance with date/time "%s"', $this->end->toIso8601String()));
 
+        // 2025-10-08 replace with accountsBalancesOptimized:
         return [
             'journals'         => $journals,
             'currency'         => $currency,
             'exists'           => 0 !== count($journals),
-            'end'              => $this->end->isoFormat((string)trans('config.month_and_day_moment_js', [], $locale)),
-            'endBalance'       => app('steam')->balance($account, $this->end),
-            'dayBefore'        => $date->isoFormat((string)trans('config.month_and_day_moment_js', [], $locale)),
+            'end'              => $this->end->isoFormat((string) trans('config.month_and_day_moment_js', [], $locale)),
+            // 'endBalance'       => Steam::finalAccountBalance($account, $this->end)['balance'],
+            'endBalance'       => Steam::accountsBalancesOptimized(new Collection()->push($account), $this->end)[$account->id]['balance'],
+            'dayBefore'        => $date->isoFormat((string) trans('config.month_and_day_moment_js', [], $locale)),
             'dayBeforeBalance' => $dayBeforeBalance,
         ];
     }

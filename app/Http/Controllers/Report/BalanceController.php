@@ -23,15 +23,17 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Budget;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Class BalanceController.
@@ -96,7 +98,7 @@ class BalanceController extends Controller
 
             /** @var GroupCollectorInterface $collector */
             $collector                             = app(GroupCollectorInterface::class);
-            $journals                              = $collector->setRange($start, $end)->setSourceAccounts($accounts)->setTypes([TransactionType::WITHDRAWAL])->setBudget($budget)
+            $journals                              = $collector->setRange($start, $end)->setSourceAccounts($accounts)->setTypes([TransactionTypeEnum::WITHDRAWAL->value])->setBudget($budget)
                 ->getExtractedJournals()
             ;
 
@@ -113,7 +115,7 @@ class BalanceController extends Controller
                     'currency_decimal_places' => $journal['currency_decimal_places'],
                     'spent'                   => '0',
                 ];
-                $spent[$sourceAccount]['spent']                                = bcadd($spent[$sourceAccount]['spent'], $journal['amount']);
+                $spent[$sourceAccount]['spent']                                = bcadd($spent[$sourceAccount]['spent'], (string) $journal['amount']);
 
                 // also fix sum:
                 $report['sums'][$budgetId][$currencyId] ??= [
@@ -124,8 +126,8 @@ class BalanceController extends Controller
                     'currency_symbol'         => $journal['currency_symbol'],
                     'currency_decimal_places' => $journal['currency_decimal_places'],
                 ];
-                $report['sums'][$budgetId][$currencyId]['sum']                 = bcadd($report['sums'][$budgetId][$currencyId]['sum'], $journal['amount']);
-                $report['accounts'][$sourceAccount]['sum']                     = bcadd($report['accounts'][$sourceAccount]['sum'], $journal['amount']);
+                $report['sums'][$budgetId][$currencyId]['sum']                 = bcadd($report['sums'][$budgetId][$currencyId]['sum'], (string) $journal['amount']);
+                $report['accounts'][$sourceAccount]['sum']                     = bcadd($report['accounts'][$sourceAccount]['sum'], (string) $journal['amount']);
 
                 // add currency info for account sum
                 $report['accounts'][$sourceAccount]['currency_id']             = $journal['currency_id'];
@@ -139,10 +141,10 @@ class BalanceController extends Controller
         }
 
         try {
-            $result = view('reports.partials.balance', compact('report'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.balance: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $result = view('reports.partials.balance', ['report' => $report])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.balance: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = 'Could not render view.';
 
             throw new FireflyException($result, 0, $e);

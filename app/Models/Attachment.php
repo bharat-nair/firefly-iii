@@ -23,9 +23,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\AttachmentObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,24 +36,14 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperAttachment
- */
+#[ObservedBy([AttachmentObserver::class])]
 class Attachment extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'uploaded'   => 'boolean',
-        ];
-
-    protected $fillable = ['attachable_id', 'attachable_type', 'user_id', 'md5', 'filename', 'mime', 'title', 'description', 'size', 'uploaded'];
+    protected $fillable = ['attachable_id', 'attachable_type', 'user_id', 'user_group_id', 'md5', 'filename', 'mime', 'title', 'description', 'size', 'uploaded'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -108,7 +100,19 @@ class Attachment extends Model
     protected function attachableId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'uploaded'      => 'boolean',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
     }
 }

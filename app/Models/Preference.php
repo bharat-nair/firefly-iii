@@ -30,22 +30,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperPreference
- */
 class Preference extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'data'       => 'array',
-        ];
-
-    protected $fillable = ['user_id', 'data', 'name'];
+    protected $fillable = ['user_id', 'data', 'name', 'user_group_id'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -80,6 +70,7 @@ class Preference extends Model
                 $preference = $user->preferences()->where('id', (int)$value)->first();
             }
             if (null !== $preference) {
+                /** @var Preference $preference */
                 return $preference;
             }
             $default     = config('firefly.default_preferences');
@@ -101,5 +92,16 @@ class Preference extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'data'          => 'array',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
     }
 }

@@ -24,8 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Validator;
+use JsonException;
+
+use function Safe\json_decode;
 
 /**
  * Class IsValidBulkClause
@@ -38,7 +42,7 @@ class IsValidBulkClause implements ValidationRule
     public function __construct(string $type)
     {
         $this->rules = config(sprintf('bulk.%s', $type));
-        $this->error = (string)trans('firefly.belongs_user');
+        $this->error = (string) trans('firefly.belongs_user');
     }
 
     public function message(): string
@@ -47,11 +51,11 @@ class IsValidBulkClause implements ValidationRule
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $result = $this->basicValidation((string)$value);
+        $result = $this->basicValidation((string) $value);
         if (false === $result) {
             $fail($this->error);
         }
@@ -64,15 +68,15 @@ class IsValidBulkClause implements ValidationRule
     {
         try {
             $array = json_decode($value, true, 8, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
-            $this->error = (string)trans('validation.json');
+        } catch (JsonException) {
+            $this->error = (string) trans('validation.json');
 
             return false;
         }
         $clauses = ['where', 'update'];
         foreach ($clauses as $clause) {
             if (!array_key_exists($clause, $array)) {
-                $this->error = (string)trans(sprintf('validation.missing_%s', $clause));
+                $this->error = (string) trans(sprintf('validation.missing_%s', $clause));
 
                 return false;
             }
@@ -83,7 +87,7 @@ class IsValidBulkClause implements ValidationRule
              */
             foreach ($array[$clause] as $arrayKey => $arrayValue) {
                 if (!array_key_exists($arrayKey, $this->rules[$clause])) {
-                    $this->error = (string)trans(sprintf('validation.invalid_%s_key', $clause));
+                    $this->error = (string) trans(sprintf('validation.invalid_%s_key', $clause));
 
                     return false;
                 }
@@ -92,7 +96,7 @@ class IsValidBulkClause implements ValidationRule
                     'value' => $this->rules[$clause][$arrayKey],
                 ]);
                 if ($validator->fails()) {
-                    $this->error = sprintf('%s: %s: %s', $clause, $arrayKey, implode(', ', $validator->errors()->get('value')));
+                    $this->error = sprintf('%s: %s: %s', $clause, $arrayKey, implode(', ', $validator->errors()->get('value'))); // @phpstan-ignore-line
 
                     return false;
                 }

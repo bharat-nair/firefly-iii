@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ReturnsIntegerIdTrait.php
  * Copyright (c) 2023 james@firefly-iii.org
@@ -33,12 +34,12 @@ trait ReturnsIntegerIdTrait
     /**
      * Get the ID
      *
-     * @SuppressWarnings(PHPMD.ShortMethodName)
+     * @SuppressWarnings("PHPMD.ShortMethodName")
      */
     protected function id(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

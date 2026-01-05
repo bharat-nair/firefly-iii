@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RuleUpdateRequest.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Rule;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Models\Rule;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsValidActionExpression;
@@ -31,7 +33,6 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Support\Request\GetRuleConfiguration;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class UpdateRequest
@@ -108,8 +109,8 @@ class UpdateRequest extends FormRequest
                 $return[] = [
                     'type'            => $action['type'],
                     'value'           => $action['value'],
-                    'active'          => $this->convertBoolean((string)($action['active'] ?? 'false')),
-                    'stop_processing' => $this->convertBoolean((string)($action['stop_processing'] ?? 'false')),
+                    'active'          => $this->convertBoolean((string) ($action['active'] ?? 'false')),
+                    'stop_processing' => $this->convertBoolean((string) ($action['stop_processing'] ?? 'false')),
                 ];
             }
         }
@@ -137,7 +138,7 @@ class UpdateRequest extends FormRequest
             'description'                => 'min:1|max:32768|nullable',
             'rule_group_id'              => 'belongsToUser:rule_groups',
             'rule_group_title'           => 'nullable|min:1|max:255|belongsToUser:rule_groups,title',
-            'trigger'                    => 'in:store-journal,update-journal',
+            'trigger'                    => 'in:store-journal,update-journal.manual-activation',
             'triggers.*.type'            => 'required|in:'.implode(',', $validTriggers),
             'triggers.*.value'           => 'required_if:actions.*.type,'.$contextTriggers.'|min:1|ruleTriggerValue|max:1024',
             'triggers.*.stop_processing' => [new IsBoolean()],
@@ -167,7 +168,7 @@ class UpdateRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 
@@ -180,7 +181,7 @@ class UpdateRequest extends FormRequest
         $triggers = $data['triggers'] ?? null;
         // need at least one trigger
         if (is_array($triggers) && 0 === count($triggers)) {
-            $validator->errors()->add('title', (string)trans('validation.at_least_one_trigger'));
+            $validator->errors()->add('title', (string) trans('validation.at_least_one_trigger'));
         }
     }
 
@@ -206,8 +207,8 @@ class UpdateRequest extends FormRequest
                 $inactiveIndex = $index;
             }
         }
-        if (true === $allInactive) {
-            $validator->errors()->add(sprintf('triggers.%d.active', $inactiveIndex), (string)trans('validation.at_least_one_active_trigger'));
+        if ($allInactive) {
+            $validator->errors()->add(sprintf('triggers.%d.active', $inactiveIndex), (string) trans('validation.at_least_one_active_trigger'));
         }
     }
 
@@ -220,7 +221,7 @@ class UpdateRequest extends FormRequest
         $actions = $data['actions'] ?? null;
         // need at least one action
         if (is_array($actions) && 0 === count($actions)) {
-            $validator->errors()->add('title', (string)trans('validation.at_least_one_action'));
+            $validator->errors()->add('title', (string) trans('validation.at_least_one_action'));
         }
     }
 
@@ -247,8 +248,8 @@ class UpdateRequest extends FormRequest
                 $inactiveIndex = $index;
             }
         }
-        if (true === $allInactive) {
-            $validator->errors()->add(sprintf('actions.%d.active', $inactiveIndex), (string)trans('validation.at_least_one_active_action'));
+        if ($allInactive) {
+            $validator->errors()->add(sprintf('actions.%d.active', $inactiveIndex), (string) trans('validation.at_least_one_active_action'));
         }
     }
 }

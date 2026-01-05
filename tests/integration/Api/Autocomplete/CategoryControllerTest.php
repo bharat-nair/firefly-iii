@@ -1,4 +1,5 @@
 <?php
+
 /*
  * CategoryControllerTest.php
  * Copyright (c) 2024 tasnim0tantawi
@@ -42,14 +43,6 @@ final class CategoryControllerTest extends TestCase
      */
     use RefreshDatabase;
 
-    protected function createAuthenticatedUser(): User
-    {
-        return User::create([
-            'email'    => 'test@email.com',
-            'password' => 'password',
-        ]);
-    }
-
     private function createTestCategories(int $count, User $user): void
     {
         for ($i = 1; $i <= $count; ++$i) {
@@ -67,7 +60,7 @@ final class CategoryControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.categories'), ['Accept' => 'application/json']);
         $response->assertStatus(401);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertContent('{"message":"Unauthenticated","exception":"AuthenticationException"}');
+        $response->assertContent('{"message":"Unauthenticated.","exception":"AuthenticationException"}');
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheCategoriesEndpointThenReturns200HttpCode(): void

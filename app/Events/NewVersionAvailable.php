@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Events;
 
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class NewVersionAvailable
@@ -33,13 +34,11 @@ class NewVersionAvailable extends Event
 {
     use SerializesModels;
 
-    public string $message;
-
     /**
      * Create a new event instance. This event is triggered when a new version is available.
      */
-    public function __construct(string $message)
+    public function __construct(public string $message)
     {
-        $this->message = $message;
+        Log::debug(__METHOD__);
     }
 }

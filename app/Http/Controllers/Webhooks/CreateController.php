@@ -44,8 +44,8 @@ class CreateController extends Controller
             static function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-bolt');
                 app('view')->share('subTitleIcon', 'fa-plus');
-                app('view')->share('title', (string)trans('firefly.webhooks'));
-                app('view')->share('subTitle', (string)trans('firefly.create_new_webhook'));
+                app('view')->share('title', (string) trans('firefly.webhooks'));
+                app('view')->share('subTitle', (string) trans('firefly.create_new_webhook'));
 
                 return $next($request);
             }
@@ -57,7 +57,7 @@ class CreateController extends Controller
      *
      * @return Factory|View
      */
-    public function index()
+    public function index(): Factory|\Illuminate\Contracts\View\View
     {
         if (false === config('firefly.allow_webhooks')) {
             Log::channel('audit')->warning('User visits webhook create page, but webhooks are DISABLED.');
@@ -67,6 +67,6 @@ class CreateController extends Controller
         Log::channel('audit')->info('User visits webhook create page.');
         $previousUrl = $this->rememberPreviousUrl('webhooks.create.url');
 
-        return view('webhooks.create', compact('previousUrl'));
+        return view('webhooks.create', ['previousUrl' => $previousUrl]);
     }
 }

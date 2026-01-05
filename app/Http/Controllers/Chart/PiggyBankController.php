@@ -23,8 +23,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Chart;
 
+use FireflyIII\Support\Facades\Navigation;
 use Carbon\Carbon;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Generator\Chart\Basic\GeneratorInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\PiggyBank;
@@ -58,8 +58,6 @@ class PiggyBankController extends Controller
      * Shows the piggy bank history.
      *
      * TODO this chart is not multi currency aware.
-     *
-     * @throws FireflyException
      */
     public function history(PiggyBankRepositoryInterface $repository, PiggyBank $piggyBank): JsonResponse
     {
@@ -75,7 +73,7 @@ class PiggyBankController extends Controller
         $locale                 = app('steam')->getLocale();
 
         // get first event or start date of piggy bank or today
-        $startDate              = $piggyBank->startdate ?? today(config('app.timezone'));
+        $startDate              = $piggyBank->start_date ?? today(config('app.timezone'));
 
         /** @var null|PiggyBankEvent $firstEvent */
         $firstEvent             = $set->first();
@@ -90,22 +88,18 @@ class PiggyBankController extends Controller
         $chartData              = [];
         while ($oldest <= $today) {
             $filtered          = $set->filter(
-                static function (PiggyBankEvent $event) use ($oldest) {
-                    return $event->date->lte($oldest);
-                }
+                static fn (PiggyBankEvent $event) => $event->date->lte($oldest)
             );
             $currentSum        = $filtered->sum('amount');
-            $label             = $oldest->isoFormat((string)trans('config.month_and_day_js', [], $locale));
+            $label             = $oldest->isoFormat((string) trans('config.month_and_day_js', [], $locale));
             $chartData[$label] = $currentSum;
-            $oldest            = app('navigation')->addPeriod($oldest, $step, 0);
+            $oldest            = Navigation::addPeriod($oldest, $step);
         }
         $finalFiltered          = $set->filter(
-            static function (PiggyBankEvent $event) use ($today) {
-                return $event->date->lte($today);
-            }
+            static fn (PiggyBankEvent $event) => $event->date->lte($today)
         );
         $finalSum               = $finalFiltered->sum('amount');
-        $finalLabel             = $today->isoFormat((string)trans('config.month_and_day_js', [], $locale));
+        $finalLabel             = $today->isoFormat((string) trans('config.month_and_day_js', [], $locale));
         $chartData[$finalLabel] = $finalSum;
 
         $data                   = $this->generator->singleSet($piggyBank->name, $chartData);

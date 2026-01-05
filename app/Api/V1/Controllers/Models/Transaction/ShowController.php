@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ShowController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -24,11 +25,11 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\Transaction;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Support\Http\Api\TransactionFilter;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
@@ -50,8 +51,6 @@ class ShowController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/transactions/listTransaction
      *
      * Show all transactions.
-     *
-     * @throws FireflyException
      */
     public function index(Request $request): JsonResponse
     {
@@ -84,7 +83,11 @@ class ShowController extends Controller
         }
         $paginator    = $collector->getPaginatedGroups();
         $paginator->setPath(route('api.v1.transactions.index').$this->buildParams());
-        $transactions = $paginator->getCollection();
+
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $transactions = $enrichment->enrich($paginator->getCollection());
 
         /** @var TransactionGroupTransformer $transformer */
         $transformer  = app(TransactionGroupTransformer::class);
@@ -135,6 +138,12 @@ class ShowController extends Controller
         if (null === $selectedGroup) {
             throw new NotFoundHttpException();
         }
+
+        // enrich
+        $enrichment    = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $selectedGroup = $enrichment->enrichSingle($selectedGroup);
+
 
         /** @var TransactionGroupTransformer $transformer */
         $transformer   = app(TransactionGroupTransformer::class);

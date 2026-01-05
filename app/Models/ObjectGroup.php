@@ -33,21 +33,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperObjectGroup
- */
 class ObjectGroup extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'user_id'    => 'integer',
-            'deleted_at' => 'datetime',
-        ];
     protected $fillable = ['title', 'order', 'user_id', 'user_group_id'];
 
     /**
@@ -101,10 +91,21 @@ class ObjectGroup extends Model
         return $this->morphedByMany(PiggyBank::class, 'object_groupable');
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+            'deleted_at'    => 'datetime',
+        ];
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

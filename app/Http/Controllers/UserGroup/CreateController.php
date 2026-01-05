@@ -1,4 +1,5 @@
 <?php
+
 /*
  * CreateController.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\UserGroup;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Http\Controllers\Controller;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
@@ -35,11 +37,13 @@ class CreateController extends Controller
      */
     public function create()
     {
-        $title         = (string)trans('firefly.administrations_page_title');
-        $subTitle      = (string)trans('firefly.administrations_page_create_sub_title');
+        $title         = (string) trans('firefly.administrations_page_title');
+        $subTitle      = (string) trans('firefly.administrations_page_create_sub_title');
         $mainTitleIcon = 'fa-book';
-        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        Log::debug(sprintf('Now at %s', __METHOD__));
 
-        return view('administrations.create')->with(compact('title', 'subTitle', 'mainTitleIcon'));
+        return view('administrations.create') // @phpstan-ignore-line
+            ->with(['title' => $title, 'subTitle' => $subTitle, 'mainTitleIcon' => $mainTitleIcon])
+        ;
     }
 }

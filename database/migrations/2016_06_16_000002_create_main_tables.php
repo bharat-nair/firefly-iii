@@ -24,6 +24,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Class CreateMainTables.
@@ -73,7 +74,7 @@ class CreateMainTables extends Migration
     /**
      * Run the migrations.
      *
-     * @SuppressWarnings(PHPMD.ShortMethodName)
+     * @SuppressWarnings("PHPMD.ShortMethodName")
      */
     public function up(): void
     {
@@ -294,25 +295,6 @@ class CreateMainTables extends Migration
                 app('log')->error(self::TABLE_ALREADY_EXISTS);
             }
         }
-        if (!Schema::hasTable('limit_repetitions')) {
-            try {
-                Schema::create(
-                    'limit_repetitions',
-                    static function (Blueprint $table): void {
-                        $table->increments('id');
-                        $table->timestamps();
-                        $table->integer('budget_limit_id', false, true);
-                        $table->date('startdate');
-                        $table->date('enddate');
-                        $table->decimal('amount', 32, 12);
-                        $table->foreign('budget_limit_id')->references('id')->on('budget_limits')->onDelete('cascade');
-                    }
-                );
-            } catch (QueryException $e) {
-                app('log')->error(sprintf(self::TABLE_ERROR, 'limit_repetitions', $e->getMessage()));
-                app('log')->error(self::TABLE_ALREADY_EXISTS);
-            }
-        }
     }
 
     private function createCategoriesTable(): void
@@ -387,7 +369,7 @@ class CreateMainTables extends Migration
     }
 
     /**
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     private function createRuleTables(): void
     {
@@ -526,8 +508,8 @@ class CreateMainTables extends Migration
     }
 
     /**
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
-     * @SuppressWarnings(PHPMD.NPathComplexity)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
+     * @SuppressWarnings("PHPMD.NPathComplexity")
      */
     private function createTransactionTables(): void
     {

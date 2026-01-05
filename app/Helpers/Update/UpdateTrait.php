@@ -1,4 +1,5 @@
 <?php
+
 /**
  * UpdateTrait.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Helpers\Update;
 
 use FireflyIII\Services\FireflyIIIOrg\Update\UpdateRequestInterface;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Trait UpdateTrait
@@ -37,12 +39,12 @@ trait UpdateTrait
      */
     public function getLatestRelease(): array
     {
-        app('log')->debug('Now in getLatestRelease()');
+        Log::debug('Now in getLatestRelease()');
 
         /** @var UpdateRequestInterface $checker */
         $checker       = app(UpdateRequestInterface::class);
         $channelConfig = app('fireflyconfig')->get('update_channel', 'stable');
-        $channel       = (string)$channelConfig->data;
+        $channel       = (string) $channelConfig->data;
 
         return $checker->getUpdateInformation($channel);
     }

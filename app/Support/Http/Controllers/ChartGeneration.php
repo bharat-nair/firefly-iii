@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ChartGeneration.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -29,7 +30,10 @@ use FireflyIII\Generator\Chart\Basic\GeneratorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
+use FireflyIII\Support\Facades\Amount;
+use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Trait ChartGeneration
@@ -44,33 +48,38 @@ trait ChartGeneration
     protected function accountBalanceChart(Collection $accounts, Carbon $start, Carbon $end): array // chart helper method.
     {
         // chart properties for cache:
-        $cache        = new CacheProperties();
+        $convertToPrimary = Amount::convertToPrimary();
+        $cache            = new CacheProperties();
         $cache->addProperty($start);
         $cache->addProperty($end);
         $cache->addProperty('chart.account.account-balance-chart');
         $cache->addProperty($accounts);
+        $cache->addProperty($convertToPrimary);
         if ($cache->has()) {
             return $cache->get();
         }
-        app('log')->debug('Regenerate chart.account.account-balance-chart from scratch.');
-        $locale       = app('steam')->getLocale();
+        Log::debug('Regenerate chart.account.account-balance-chart from scratch.');
+        $locale           = app('steam')->getLocale();
 
         /** @var GeneratorInterface $generator */
-        $generator    = app(GeneratorInterface::class);
+        $generator        = app(GeneratorInterface::class);
 
         /** @var AccountRepositoryInterface $accountRepos */
-        $accountRepos = app(AccountRepositoryInterface::class);
+        $accountRepos     = app(AccountRepositoryInterface::class);
 
-        $default      = app('amount')->getDefaultCurrency();
-        $chartData    = [];
+        $primary          = app('amount')->getPrimaryCurrency();
+        $chartData        = [];
+
+        Log::debug(sprintf('Start of accountBalanceChart(list, %s, %s)', $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
 
         /** @var Account $account */
         foreach ($accounts as $account) {
-            // TODO we can use getAccountCurrency instead.
-            $currency     = $accountRepos->getAccountCurrency($account);
-            if (null === $currency) {
-                $currency = $default;
-            }
+            Log::debug(sprintf('Now at account #%d ("%s)', $account->id, $account->name));
+            $currency     = $accountRepos->getAccountCurrency($account) ?? $primary;
+            $usePrimary   = $convertToPrimary && $primary->id !== $currency->id;
+            $field        = $convertToPrimary ? 'pc_balance' : 'balance';
+            $currency     = $usePrimary ? $primary : $currency;
+            Log::debug(sprintf('Will use field %s', $field));
             $currentSet   = [
                 'label'           => $account->name,
                 'currency_symbol' => $currency->symbol,
@@ -78,19 +87,20 @@ trait ChartGeneration
             ];
 
             $currentStart = clone $start;
-            $range        = app('steam')->balanceInRange($account, $start, clone $end);
+            $range        = Steam::finalAccountBalanceInRange($account, clone $start, clone $end, $this->convertToPrimary);
             $previous     = array_values($range)[0];
+            Log::debug(sprintf('Start balance for account #%d ("%s) is', $account->id, $account->name), $previous);
             while ($currentStart <= $end) {
                 $format                        = $currentStart->format('Y-m-d');
                 $label                         = trim($currentStart->isoFormat((string)trans('config.month_and_day_js', [], $locale)));
                 $balance                       = $range[$format] ?? $previous;
                 $previous                      = $balance;
                 $currentStart->addDay();
-                $currentSet['entries'][$label] = $balance;
+                $currentSet['entries'][$label] = $balance[$field] ?? '0';
             }
             $chartData[]  = $currentSet;
         }
-        $data         = $generator->multiSet($chartData);
+        $data             = $generator->multiSet($chartData);
         $cache->store($data);
 
         return $data;

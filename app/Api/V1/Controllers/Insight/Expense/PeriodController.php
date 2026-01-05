@@ -1,4 +1,5 @@
 <?php
+
 /*
  * PeriodController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -25,54 +26,62 @@ namespace FireflyIII\Api\V1\Controllers\Insight\Expense;
 
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Insight\GenericRequest;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
-use FireflyIII\Models\TransactionType;
+use FireflyIII\Support\Facades\Amount;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class PeriodController
  */
 class PeriodController extends Controller
 {
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/insight/insightExpenseTotal
-     */
     public function total(GenericRequest $request): JsonResponse
     {
-        $accounts   = $request->getAssetAccounts();
-        $start      = $request->getStart();
-        $end        = $request->getEnd();
-        $response   = [];
+        $accounts         = $request->getAssetAccounts();
+        $start            = $request->getStart();
+        $end              = $request->getEnd();
+        $response         = [];
+        $convertToPrimary = Amount::convertToPrimary();
+        $primary          = Amount::getPrimaryCurrency();
 
         // collect all expenses in this period (regardless of type)
-        $collector  = app(GroupCollectorInterface::class);
-        $collector->setTypes([TransactionType::WITHDRAWAL])->setRange($start, $end)->setSourceAccounts($accounts);
-        $genericSet = $collector->getExtractedJournals();
+        $collector        = app(GroupCollectorInterface::class);
+        $collector->setTypes([TransactionTypeEnum::WITHDRAWAL->value])->setRange($start, $end)->setSourceAccounts($accounts);
+        $genericSet       = $collector->getExtractedJournals();
         foreach ($genericSet as $journal) {
-            $currencyId        = (int)$journal['currency_id'];
-            $foreignCurrencyId = (int)$journal['foreign_currency_id'];
+            // same code as many other sumExpense methods. I think this needs some kind of generic method.
+            $amount                                    = '0';
+            $currencyId                                = (int) $journal['currency_id'];
+            $currencyCode                              = $journal['currency_code'];
+            if ($convertToPrimary) {
+                $amount = Amount::getAmountFromJournal($journal);
+                if ($primary->id !== (int) $journal['currency_id'] && $primary->id !== (int) $journal['foreign_currency_id']) {
+                    $currencyId   = $primary->id;
+                    $currencyCode = $primary->code;
+                }
+                if ($primary->id !== (int) $journal['currency_id'] && $primary->id === (int) $journal['foreign_currency_id']) {
+                    $currencyId   = $journal['foreign_currency_id'];
+                    $currencyCode = $journal['foreign_currency_code'];
+                }
+                Log::debug(sprintf('[a] Add amount %s %s', $currencyCode, $amount));
+            }
+            if (!$convertToPrimary) {
+                // ignore the amount in foreign currency.
+                Log::debug(sprintf('[b] Add amount %s %s', $currencyCode, $journal['amount']));
+                $amount = $journal['amount'];
+            }
 
-            if (0 !== $currencyId) {
-                $response[$currencyId] ??= [
-                    'difference'       => '0',
-                    'difference_float' => 0,
-                    'currency_id'      => (string)$currencyId,
-                    'currency_code'    => $journal['currency_code'],
-                ];
-                $response[$currencyId]['difference']       = bcadd($response[$currencyId]['difference'], $journal['amount']);
-                $response[$currencyId]['difference_float'] = (float)$response[$currencyId]['difference']; // intentional float
-            }
-            if (0 !== $foreignCurrencyId) {
-                $response[$foreignCurrencyId] ??= [
-                    'difference'       => '0',
-                    'difference_float' => 0,
-                    'currency_id'      => (string)$foreignCurrencyId,
-                    'currency_code'    => $journal['foreign_currency_code'],
-                ];
-                $response[$foreignCurrencyId]['difference']       = bcadd($response[$foreignCurrencyId]['difference'], $journal['foreign_amount']);
-                $response[$foreignCurrencyId]['difference_float'] = (float)$response[$foreignCurrencyId]['difference']; // intentional float
-            }
+
+            $response[$currencyId] ??= [
+                'difference'       => '0',
+                'difference_float' => 0,
+                'currency_id'      => (string) $currencyId,
+                'currency_code'    => $currencyCode,
+            ];
+            $response[$currencyId]['difference']       = bcadd($response[$currencyId]['difference'], $amount);
+            $response[$currencyId]['difference_float'] = (float) $response[$currencyId]['difference']; // intentional float
         }
 
         return response()->json(array_values($response));

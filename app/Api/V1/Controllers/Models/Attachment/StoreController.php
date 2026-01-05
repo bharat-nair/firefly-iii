@@ -1,4 +1,5 @@
 <?php
+
 /*
  * StoreController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -79,14 +80,13 @@ class StoreController extends Controller
 
             throw new NotFoundHttpException();
         }
-        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        Log::debug(sprintf('Now in %s', __METHOD__));
         $data        = $request->getAll();
         $attachment  = $this->repository->store($data);
         $manager     = $this->getManager();
 
         /** @var AttachmentTransformer $transformer */
         $transformer = app(AttachmentTransformer::class);
-        $transformer->setParameters($this->parameters);
 
         $resource    = new Item($attachment, $transformer, 'attachments');
 
@@ -108,11 +108,16 @@ class StoreController extends Controller
         $helper = app(AttachmentHelperInterface::class);
         $body   = $request->getContent();
         if ('' === $body) {
-            app('log')->error('Body of attachment is empty.');
+            Log::error('Body of attachment is empty.');
 
             return response()->json([], 422);
         }
-        $helper->saveAttachmentFromApi($attachment, $body);
+        $result = $helper->saveAttachmentFromApi($attachment, $body);
+        if (false === $result) {
+            Log::error('Could not save attachment from API.');
+
+            return response()->json([], 422);
+        }
 
         return response()->json([], 204);
     }

@@ -30,22 +30,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
-/**
- * @mixin IdeHelperLocation
- */
 class Location extends Model
 {
     use ReturnsIntegerIdTrait;
-
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'zoomLevel'  => 'int',
-            'latitude'   => 'float',
-            'longitude'  => 'float',
-        ];
 
     protected $fillable = ['locatable_id', 'locatable_type', 'latitude', 'longitude', 'zoom_level'];
 
@@ -79,10 +66,22 @@ class Location extends Model
         return $this->morphMany(TransactionJournal::class, 'locatable');
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+            'zoomLevel'  => 'int',
+            'latitude'   => 'float',
+            'longitude'  => 'float',
+        ];
+    }
+
     protected function locatableId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AccessTokenCreatedMail.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -49,7 +50,7 @@ class AccessTokenCreatedMail extends Mailable
     {
         return $this
             ->markdown('emails.token-created')
-            ->subject((string)trans('email.access_token_created_subject'))
+            ->subject((string) trans('email.access_token_created_subject'))
         ;
     }
 }

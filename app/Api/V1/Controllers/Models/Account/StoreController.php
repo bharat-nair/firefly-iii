@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AccountController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -26,7 +27,9 @@ namespace FireflyIII\Api\V1\Controllers\Models\Account;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\Account\StoreRequest;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Support\JsonApi\Enrichments\AccountEnrichment;
 use FireflyIII\Transformers\AccountTransformer;
+use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use League\Fractal\Resource\Item;
 
@@ -68,9 +71,16 @@ class StoreController extends Controller
         $account     = $this->repository->store($data);
         $manager     = $this->getManager();
 
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new AccountEnrichment();
+        $enrichment->setDate(null);
+        $enrichment->setUser($admin);
+        $account     = $enrichment->enrichSingle($account);
+
         /** @var AccountTransformer $transformer */
         $transformer = app(AccountTransformer::class);
-        $transformer->setParameters($this->parameters);
 
         $resource    = new Item($account, $transformer, self::RESOURCE_KEY);
 

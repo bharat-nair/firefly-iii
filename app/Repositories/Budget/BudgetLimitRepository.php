@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BudgetLimitRepository.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -28,19 +29,23 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\TransactionCurrencyFactory;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
+use FireflyIII\Models\Note;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Facades\Amount;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
+use FireflyIII\Support\Singleton\PreferencesSingleton;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Override;
 
 /**
  * Class BudgetLimitRepository
  */
-class BudgetLimitRepository implements BudgetLimitRepositoryInterface
+class BudgetLimitRepository implements BudgetLimitRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * Tells you which amount has been budgeted (for the given budgets)
@@ -85,7 +90,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
             ->where('budgets.active', true)
             ->where('budgets.user_id', $this->user->id)
         ;
-        if (null !== $budgets && $budgets->count() > 0) {
+        if ($budgets instanceof Collection && $budgets->count() > 0) {
             $query->whereIn('budget_limits.budget_id', $budgets->pluck('id')->toArray());
         }
 
@@ -94,7 +99,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
 
         /** @var BudgetLimit $budgetLimit */
         foreach ($set as $budgetLimit) {
-            $result = bcadd($budgetLimit->amount, $result);
+            $result = bcadd((string) $budgetLimit->amount, $result);
         }
 
         return $result;
@@ -125,16 +130,14 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
     public function getAllBudgetLimitsByCurrency(TransactionCurrency $currency, ?Carbon $start = null, ?Carbon $end = null): Collection
     {
         return $this->getAllBudgetLimits($start, $end)->filter(
-            static function (BudgetLimit $budgetLimit) use ($currency) {
-                return $budgetLimit->transaction_currency_id === $currency->id;
-            }
+            static fn (BudgetLimit $budgetLimit): bool => $budgetLimit->transaction_currency_id === $currency->id
         );
     }
 
     public function getAllBudgetLimits(?Carbon $start = null, ?Carbon $end = null): Collection
     {
         // both are NULL:
-        if (null === $start && null === $end) {
+        if (!$start instanceof Carbon && !$end instanceof Carbon) {
             return BudgetLimit::leftJoin('budgets', 'budgets.id', '=', 'budget_limits.budget_id')
                 ->with(['budget'])
                 ->where('budgets.user_id', $this->user->id)
@@ -143,17 +146,17 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
             ;
         }
         // one of the two is NULL.
-        if (null === $start xor null === $end) {
+        if (!$start instanceof Carbon xor !$end instanceof Carbon) {
             $query = BudgetLimit::leftJoin('budgets', 'budgets.id', '=', 'budget_limits.budget_id')
                 ->with(['budget'])
                 ->whereNull('budgets.deleted_at')
                 ->where('budgets.user_id', $this->user->id)
             ;
-            if (null !== $end) {
+            if ($end instanceof Carbon) {
                 // end date must be before $end.
                 $query->where('end_date', '<=', $end->format('Y-m-d 00:00:00'));
             }
-            if (null !== $start) {
+            if ($start instanceof Carbon) {
                 // start date must be after $start.
                 $query->where('start_date', '>=', $start->format('Y-m-d 00:00:00'));
             }
@@ -200,17 +203,17 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
 
     public function getBudgetLimits(Budget $budget, ?Carbon $start = null, ?Carbon $end = null): Collection
     {
-        if (null === $end && null === $start) {
+        if (!$end instanceof Carbon && !$start instanceof Carbon) {
             return $budget->budgetlimits()->with(['transactionCurrency'])->orderBy('budget_limits.start_date', 'DESC')->get(['budget_limits.*']);
         }
-        if (null === $end xor null === $start) {
+        if (!$end instanceof Carbon xor !$start instanceof Carbon) {
             $query = $budget->budgetlimits()->with(['transactionCurrency'])->orderBy('budget_limits.start_date', 'DESC');
             // one of the two is null
-            if (null !== $end) {
+            if ($end instanceof Carbon) {
                 // end date must be before $end.
                 $query->where('end_date', '<=', $end->format('Y-m-d 00:00:00'));
             }
-            if (null !== $start) {
+            if ($start instanceof Carbon) {
                 // start date must be after $start.
                 $query->where('start_date', '>=', $start->format('Y-m-d 00:00:00'));
             }
@@ -221,7 +224,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         // when both dates are set:
         return $budget->budgetlimits()
             ->where(
-                static function (Builder $q5) use ($start, $end): void { // @phpstan-ignore-line
+                static function (Builder $q5) use ($start, $end): void {
                     $q5->where(
                         static function (Builder $q1) use ($start, $end): void {
                             // budget limit ends within period
@@ -254,11 +257,10 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         ;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
+    #[Override]
+    public function getNoteText(BudgetLimit $budgetLimit): string
     {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
+        return (string) $budgetLimit->notes()->first()?->text;
     }
 
     /**
@@ -271,13 +273,14 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         $factory                        = app(TransactionCurrencyFactory::class);
         $currency                       = $factory->find($data['currency_id'] ?? null, $data['currency_code'] ?? null);
         if (null === $currency) {
-            $currency = app('amount')->getDefaultCurrencyByUserGroup($this->user->userGroup);
+            $currency = Amount::getPrimaryCurrencyByUserGroup($this->user->userGroup);
         }
         $currency->enabled              = true;
         $currency->save();
 
         // find the budget:
-        $budget                         = $this->user->budgets()->find((int)$data['budget_id']);
+        /** @var null|Budget $budget */
+        $budget                         = $this->user->budgets()->find((int) $data['budget_id']);
         if (null === $budget) {
             throw new FireflyException('200004: Budget does not exist.');
         }
@@ -292,7 +295,11 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         if (null !== $limit) {
             throw new FireflyException('200027: Budget limit already exists.');
         }
-        app('log')->debug('No existing budget limit, create a new one');
+        Log::debug('No existing budget limit, create a new one');
+
+        // this is a lame trick to communicate with the observer.
+        $singleton                      = PreferencesSingleton::getInstance();
+        $singleton->setPreference('fire_webhooks_bl_store', $data['fire_webhooks'] ?? true);
 
         // or create one and return it.
         $limit                          = new BudgetLimit();
@@ -302,18 +309,42 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         $limit->amount                  = $data['amount'];
         $limit->transaction_currency_id = $currency->id;
         $limit->save();
-        app('log')->debug(sprintf('Created new budget limit with ID #%d and amount %s', $limit->id, $data['amount']));
+
+        $noteText                       = (string) ($data['notes'] ?? '');
+        if ('' !== $noteText) {
+            $this->setNoteText($limit, $noteText);
+        }
+
+        Log::debug(sprintf('Created new budget limit with ID #%d and amount %s', $limit->id, $data['amount']));
 
         return $limit;
     }
 
     public function find(Budget $budget, TransactionCurrency $currency, Carbon $start, Carbon $end): ?BudgetLimit
     {
+        /** @var null|BudgetLimit */
         return $budget->budgetlimits()
             ->where('transaction_currency_id', $currency->id)
             ->where('start_date', $start->format('Y-m-d'))
             ->where('end_date', $end->format('Y-m-d'))->first()
         ;
+    }
+
+    #[Override]
+    public function setNoteText(BudgetLimit $budgetLimit, string $text): void
+    {
+        $dbNote = $budgetLimit->notes()->first();
+        if ('' !== $text) {
+            if (null === $dbNote) {
+                $dbNote = new Note();
+                $dbNote->noteable()->associate($budgetLimit);
+            }
+            $dbNote->text = trim($text);
+            $dbNote->save();
+
+            return;
+        }
+        $dbNote?->delete();
     }
 
     /**
@@ -323,8 +354,15 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
     {
         $budgetLimit->amount                  = array_key_exists('amount', $data) ? $data['amount'] : $budgetLimit->amount;
         $budgetLimit->budget_id               = array_key_exists('budget_id', $data) ? $data['budget_id'] : $budgetLimit->budget_id;
-        $budgetLimit->start_date              = array_key_exists('start', $data) ? $data['start']->format('Y-m-d 00:00:00') : $budgetLimit->start_date;
-        $budgetLimit->end_date                = array_key_exists('end', $data) ? $data['end']->format('Y-m-d 23:59:59') : $budgetLimit->end_date;
+
+        if (array_key_exists('start', $data)) {
+            $budgetLimit->start_date    = $data['start']->startOfDay();
+            $budgetLimit->start_date_tz = $data['start']->format('e');
+        }
+        if (array_key_exists('end', $data)) {
+            $budgetLimit->end_date    = $data['end']->endOfDay();
+            $budgetLimit->end_date_tz = $data['end']->format('e');
+        }
 
         // if no currency has been provided, use the user's default currency:
         $currency                             = null;
@@ -337,72 +375,83 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         }
         // catch unexpected null:
         if (null === $currency) {
-            $currency = $budgetLimit->transactionCurrency ?? app('amount')->getDefaultCurrencyByUserGroup($this->user->userGroup);
+            $currency = $budgetLimit->transactionCurrency ?? Amount::getPrimaryCurrencyByUserGroup($this->user->userGroup);
         }
         $currency->enabled                    = true;
         $currency->save();
 
+        // this is a lame trick to communicate with the observer.
+        $singleton                            = PreferencesSingleton::getInstance();
+        $singleton->setPreference('fire_webhooks_bl_update', $data['fire_webhooks'] ?? true);
+
         $budgetLimit->transaction_currency_id = $currency->id;
         $budgetLimit->save();
+
+        // update notes if they exist.
+        if (array_key_exists('notes', $data)) {
+            $this->setNoteText($budgetLimit, (string) $data['notes']);
+        }
 
         return $budgetLimit;
     }
 
-    public function updateLimitAmount(Budget $budget, Carbon $start, Carbon $end, string $amount): ?BudgetLimit
-    {
-        // count the limits:
-        $limits            = $budget->budgetlimits()
-            ->where('budget_limits.start_date', $start->format('Y-m-d 00:00:00'))
-            ->where('budget_limits.end_date', $end->format('Y-m-d 00:00:00'))
-            ->count('budget_limits.*')
-        ;
-        app('log')->debug(sprintf('Found %d budget limits.', $limits));
-
-        // there might be a budget limit for these dates:
-        /** @var null|BudgetLimit $limit */
-        $limit             = $budget->budgetlimits()
-            ->where('budget_limits.start_date', $start->format('Y-m-d 00:00:00'))
-            ->where('budget_limits.end_date', $end->format('Y-m-d 00:00:00'))
-            ->first(['budget_limits.*'])
-        ;
-
-        // if more than 1 limit found, delete the others:
-        if ($limits > 1 && null !== $limit) {
-            app('log')->debug(sprintf('Found more than 1, delete all except #%d', $limit->id));
-            $budget->budgetlimits()
-                ->where('budget_limits.start_date', $start->format('Y-m-d 00:00:00'))
-                ->where('budget_limits.end_date', $end->format('Y-m-d 00:00:00'))
-                ->where('budget_limits.id', '!=', $limit->id)->delete()
-            ;
-        }
-
-        // delete if amount is zero.
-        // Returns 0 if the two operands are equal,
-        // 1 if the left_operand is larger than the right_operand, -1 otherwise.
-        if (null !== $limit && bccomp($amount, '0') <= 0) {
-            app('log')->debug(sprintf('%s is zero, delete budget limit #%d', $amount, $limit->id));
-            $limit->delete();
-
-            return null;
-        }
-        // update if exists:
-        if (null !== $limit) {
-            app('log')->debug(sprintf('Existing budget limit is #%d, update this to amount %s', $limit->id, $amount));
-            $limit->amount = $amount;
-            $limit->save();
-
-            return $limit;
-        }
-        app('log')->debug('No existing budget limit, create a new one');
-        // or create one and return it.
-        $limit             = new BudgetLimit();
-        $limit->budget()->associate($budget);
-        $limit->start_date = $start->startOfDay();
-        $limit->end_date   = $end->startOfDay();
-        $limit->amount     = $amount;
-        $limit->save();
-        app('log')->debug(sprintf('Created new budget limit with ID #%d and amount %s', $limit->id, $amount));
-
-        return $limit;
-    }
+    //    public function updateLimitAmount(Budget $budget, Carbon $start, Carbon $end, string $amount): ?BudgetLimit
+    //    {
+    //        // count the limits:
+    //        $limits               = $budget->budgetlimits()
+    //            ->where('budget_limits.start_date', $start->format('Y-m-d 00:00:00'))
+    //            ->where('budget_limits.end_date', $end->format('Y-m-d 00:00:00'))
+    //            ->count('budget_limits.*')
+    //        ;
+    //        Log::debug(sprintf('Found %d budget limits.', $limits));
+    //
+    //        // there might be a budget limit for these dates:
+    //        /** @var null|BudgetLimit $limit */
+    //        $limit                = $budget->budgetlimits()
+    //            ->where('budget_limits.start_date', $start->format('Y-m-d 00:00:00'))
+    //            ->where('budget_limits.end_date', $end->format('Y-m-d 00:00:00'))
+    //            ->first(['budget_limits.*'])
+    //        ;
+    //
+    //        // if more than 1 limit found, delete the others:
+    //        if ($limits > 1 && null !== $limit) {
+    //            Log::debug(sprintf('Found more than 1, delete all except #%d', $limit->id));
+    //            $budget->budgetlimits()
+    //                ->where('budget_limits.start_date', $start->format('Y-m-d 00:00:00'))
+    //                ->where('budget_limits.end_date', $end->format('Y-m-d 00:00:00'))
+    //                ->where('budget_limits.id', '!=', $limit->id)->delete()
+    //            ;
+    //        }
+    //
+    //        // delete if amount is zero.
+    //        // Returns 0 if the two operands are equal,
+    //        // 1 if the left_operand is larger than the right_operand, -1 otherwise.
+    //        if (null !== $limit && bccomp($amount, '0') <= 0) {
+    //            Log::debug(sprintf('%s is zero, delete budget limit #%d', $amount, $limit->id));
+    //            $limit->delete();
+    //
+    //            return null;
+    //        }
+    //        // update if exists:
+    //        if (null !== $limit) {
+    //            Log::debug(sprintf('Existing budget limit is #%d, update this to amount %s', $limit->id, $amount));
+    //            $limit->amount = $amount;
+    //            $limit->save();
+    //
+    //            return $limit;
+    //        }
+    //        Log::debug('No existing budget limit, create a new one');
+    //        // or create one and return it.
+    //        $limit                = new BudgetLimit();
+    //        $limit->budget()->associate($budget);
+    //        $limit->start_date    = $start->startOfDay();
+    //        $limit->start_date_tz = $start->format('e');
+    //        $limit->end_date      = $end->startOfDay();
+    //        $limit->end_date_tz   = $end->format('e');
+    //        $limit->amount        = $amount;
+    //        $limit->save();
+    //        Log::debug(sprintf('Created new budget limit with ID #%d and amount %s', $limit->id, $amount));
+    //
+    //        return $limit;
+    //    }
 }

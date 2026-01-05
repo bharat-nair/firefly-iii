@@ -52,21 +52,21 @@ class TestRequest extends FormRequest
         if (is_array($value)) {
             return null;
         }
-        $value = (string)$value;
+        $value = (string) $value;
 
         return null === $this->query($field) ? null : Carbon::createFromFormat('Y-m-d', substr($value, 0, 10));
     }
 
     private function getAccounts(): array
     {
-        return $this->get('accounts');
+        return $this->get('accounts') ?? [];
     }
 
     public function rules(): array
     {
         return [
-            'start'      => 'date',
-            'end'        => 'date|after_or_equal:start',
+            'start'      => 'date|after:1970-01-02|before:2038-01-17',
+            'end'        => 'date|after_or_equal:start|after:1970-01-02|before:2038-01-17',
             'accounts'   => '',
             'accounts.*' => 'exists:accounts,id|belongsToUser:accounts',
         ];

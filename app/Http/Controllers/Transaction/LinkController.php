@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Transaction;
 
+use FireflyIII\Support\Facades\Preferences;
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\JournalLinkRequest;
 use FireflyIII\Models\TransactionJournal;
@@ -52,7 +54,7 @@ class LinkController extends Controller
         // some useful repositories:
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.transactions'));
+                app('view')->share('title', (string) trans('firefly.transactions'));
                 app('view')->share('mainTitleIcon', 'fa-exchange');
 
                 $this->journalRepository = app(JournalRepositoryInterface::class);
@@ -68,53 +70,49 @@ class LinkController extends Controller
      *
      * @return Factory|View
      */
-    public function delete(TransactionJournalLink $link)
+    public function delete(TransactionJournalLink $link): Factory|\Illuminate\Contracts\View\View
     {
         $subTitleIcon = 'fa-link';
-        $subTitle     = (string)trans('breadcrumbs.delete_journal_link');
+        $subTitle     = (string) trans('breadcrumbs.delete_journal_link');
         $this->rememberPreviousUrl('journal_links.delete.url');
 
-        return view('transactions.links.delete', compact('link', 'subTitle', 'subTitleIcon'));
+        return view('transactions.links.delete', ['link' => $link, 'subTitle' => $subTitle, 'subTitleIcon' => $subTitleIcon]);
     }
 
     /**
      * Actually destroy it.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function destroy(TransactionJournalLink $link)
+    public function destroy(TransactionJournalLink $link): Redirector|RedirectResponse
     {
         $this->repository->destroyLink($link);
 
-        session()->flash('success', (string)trans('firefly.deleted_link'));
-        app('preferences')->mark();
+        session()->flash('success', (string) trans('firefly.deleted_link'));
+        Preferences::mark();
 
-        return redirect((string)session('journal_links.delete.url'));
+        return redirect((string) session('journal_links.delete.url'));
     }
 
     /**
      * @return Factory|View
      */
-    public function modal(TransactionJournal $journal)
+    public function modal(TransactionJournal $journal): Factory|\Illuminate\Contracts\View\View
     {
         $linkTypes = $this->repository->get();
 
-        return view('transactions.links.modal', compact('journal', 'linkTypes'));
+        return view('transactions.links.modal', ['journal' => $journal, 'linkTypes' => $linkTypes]);
     }
 
     /**
      * Store a new link.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function store(JournalLinkRequest $request, TransactionJournal $journal)
+    public function store(JournalLinkRequest $request, TransactionJournal $journal): Redirector|RedirectResponse
     {
         $linkInfo      = $request->getLinkInfo();
 
-        app('log')->debug('We are here (store)');
+        Log::debug('We are here (store)');
         $other         = $this->journalRepository->find($linkInfo['transaction_journal_id']);
-        if (null === $other) {
-            session()->flash('error', (string)trans('firefly.invalid_link_selection'));
+        if (!$other instanceof TransactionJournal) {
+            session()->flash('error', (string) trans('firefly.invalid_link_selection'));
 
             return redirect(route('transactions.show', [$journal->transaction_group_id]));
         }
@@ -122,31 +120,29 @@ class LinkController extends Controller
         $alreadyLinked = $this->repository->findLink($journal, $other);
 
         if ($other->id === $journal->id) {
-            session()->flash('error', (string)trans('firefly.journals_link_to_self'));
+            session()->flash('error', (string) trans('firefly.journals_link_to_self'));
 
             return redirect(route('transactions.show', [$journal->transaction_group_id]));
         }
 
         if ($alreadyLinked) {
-            session()->flash('error', (string)trans('firefly.journals_error_linked'));
+            session()->flash('error', (string) trans('firefly.journals_error_linked'));
 
             return redirect(route('transactions.show', [$journal->transaction_group_id]));
         }
-        app('log')->debug(sprintf('Journal is %d, opposing is %d', $journal->id, $other->id));
+        Log::debug(sprintf('Journal is %d, opposing is %d', $journal->id, $other->id));
         $this->repository->storeLink($linkInfo, $other, $journal);
-        session()->flash('success', (string)trans('firefly.journals_linked'));
+        session()->flash('success', (string) trans('firefly.journals_linked'));
 
         return redirect(route('transactions.show', [$journal->transaction_group_id]));
     }
 
     /**
      * Switch link from A <> B to B <> A.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function switchLink(Request $request)
+    public function switchLink(Request $request): Redirector|RedirectResponse
     {
-        $linkId = (int)$request->get('id');
+        $linkId = (int) $request->get('id');
         $this->repository->switchLinkById($linkId);
 
         return redirect(app('steam')->getSafePreviousUrl());

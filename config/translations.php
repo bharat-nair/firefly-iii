@@ -1,4 +1,5 @@
 <?php
+
 /*
  * translations.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -56,6 +57,7 @@ return [
                 'liability_direction_credit_short',
                 'liability_direction_null_short',
                 'interest_calc_yearly',
+                'loading',
                 'interest_calc_',
                 'interest_calc_null',
                 'interest_calc_daily',
@@ -64,6 +66,7 @@ return [
                 'interest_calc_half-year',
                 'interest_calc_quarterly',
                 'spent',
+                'budgeted',
                 'administration_owner',
                 'administration_you',
                 'administration_role_owner',
@@ -136,6 +139,13 @@ return [
         ],
         'v1' => [
             'firefly' => [
+                'administrations_page_title',
+                'administrations_index_menu',
+                'expires_at',
+                'temp_administrations_introduction',
+                'administration_currency_form_help',
+                'administrations_page_edit_sub_title_js',
+                'table',
                 'welcome_back',
                 'flash_error',
                 'flash_warning',
@@ -145,8 +155,11 @@ return [
                 'select_source_account',
                 'split_transaction_title',
                 'errors_submission',
+                'is_reconciled',
                 'split',
                 'single_split',
+                'not_enough_currencies',
+                'not_enough_currencies_enabled',
                 'transaction_stored_link',
                 'webhook_stored_link',
                 'webhook_updated_link',
@@ -234,12 +247,21 @@ return [
                 'multi_account_warning_withdrawal',
                 'multi_account_warning_deposit',
                 'multi_account_warning_transfer',
+
+                'webhook_trigger_ANY',
                 'webhook_trigger_STORE_TRANSACTION',
                 'webhook_trigger_UPDATE_TRANSACTION',
                 'webhook_trigger_DESTROY_TRANSACTION',
+
+                'webhook_trigger_STORE_BUDGET',
+                'webhook_trigger_UPDATE_BUDGET',
+                'webhook_trigger_DESTROY_BUDGET',
+                'webhook_trigger_STORE_UPDATE_BUDGET_LIMIT',
+
                 'webhook_response_TRANSACTIONS',
+                'webhook_response_RELEVANT',
                 'webhook_response_ACCOUNTS',
-                'webhook_response_none_NONE',
+                'webhook_response_NONE',
                 'webhook_delivery_JSON',
                 'actions',
                 'meta_data',
@@ -269,12 +291,23 @@ return [
                 'response',
                 'visit_webhook_url',
                 'reset_webhook_secret',
+                'header_exchange_rates',
+                'exchange_rates_intro',
+                'exchange_rates_from_to',
+                'exchange_rates_intro_rates',
+                'header_exchange_rates_rates',
+                'header_exchange_rates_table',
+                'help_rate_form',
+                'add_new_rate',
+                'save_new_rate',
             ],
             'form'    => [
                 'url',
                 'active',
                 'interest_date',
+                'administration_currency',
                 'title',
+                'date',
                 'book_date',
                 'process_date',
                 'due_date',
@@ -285,9 +318,14 @@ return [
                 'webhook_response',
                 'webhook_trigger',
                 'webhook_delivery',
+                'from_currency_to_currency',
+                'to_currency_from_currency',
+                'rate',
             ],
             'list'    => [
+                'title',
                 'active',
+                'primary_currency',
                 'trigger',
                 'response',
                 'delivery',
@@ -304,6 +342,8 @@ return [
     // TODO duplicate with firefly.php
     'languages' => [
         // currently enabled languages
+        'af_ZA',
+        'ar_SA',
         'bg_BG',
         'cs_CZ',
         'da_DK',
@@ -313,6 +353,7 @@ return [
         'en_US',
         'es_ES',
         'ca_ES',
+        'fa_IR',
         'fi_FI',
         'fr_FR',
         'hu_HU',

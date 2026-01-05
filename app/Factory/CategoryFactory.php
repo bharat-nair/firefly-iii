@@ -27,6 +27,7 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Category;
 use FireflyIII\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class CategoryFactory
@@ -40,10 +41,10 @@ class CategoryFactory
      */
     public function findOrCreate(?int $categoryId, ?string $categoryName): ?Category
     {
-        $categoryId   = (int)$categoryId;
-        $categoryName = (string)$categoryName;
+        $categoryId   = (int) $categoryId;
+        $categoryName = (string) $categoryName;
 
-        app('log')->debug(sprintf('Going to find category with ID %d and name "%s"', $categoryId, $categoryName));
+        Log::debug(sprintf('Going to find category with ID %d and name "%s"', $categoryId, $categoryName));
 
         if ('' === $categoryName && 0 === $categoryId) {
             return null;
@@ -59,7 +60,7 @@ class CategoryFactory
 
         if ('' !== $categoryName) {
             $category = $this->findByName($categoryName);
-            if (null !== $category) {
+            if ($category instanceof Category) {
                 return $category;
             }
 
@@ -72,8 +73,8 @@ class CategoryFactory
                     ]
                 );
             } catch (QueryException $e) {
-                app('log')->error($e->getMessage());
-                app('log')->error($e->getTraceAsString());
+                Log::error($e->getMessage());
+                Log::error($e->getTraceAsString());
 
                 throw new FireflyException('400003: Could not store new category.', 0, $e);
             }
@@ -84,6 +85,7 @@ class CategoryFactory
 
     public function findByName(string $name): ?Category
     {
+        /** @var null|Category */
         return $this->user->categories()->where('name', $name)->first();
     }
 

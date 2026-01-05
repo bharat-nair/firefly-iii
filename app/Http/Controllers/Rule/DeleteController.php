@@ -1,4 +1,5 @@
 <?php
+
 /**
  * DeleteController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Rule;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Rule;
 use FireflyIII\Repositories\Rule\RuleRepositoryInterface;
@@ -47,7 +49,7 @@ class DeleteController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.rules'));
+                app('view')->share('title', (string) trans('firefly.rules'));
                 app('view')->share('mainTitleIcon', 'fa-random');
 
                 $this->ruleRepos = app(RuleRepositoryInterface::class);
@@ -62,14 +64,14 @@ class DeleteController extends Controller
      *
      * @return Factory|View
      */
-    public function delete(Rule $rule)
+    public function delete(Rule $rule): Factory|\Illuminate\Contracts\View\View
     {
-        $subTitle = (string)trans('firefly.delete_rule', ['title' => $rule->title]);
+        $subTitle = (string) trans('firefly.delete_rule', ['title' => $rule->title]);
 
         // put previous url in session
         $this->rememberPreviousUrl('rules.delete.url');
 
-        return view('rules.rule.delete', compact('rule', 'subTitle'));
+        return view('rules.rule.delete', ['rule' => $rule, 'subTitle' => $subTitle]);
     }
 
     /**
@@ -80,8 +82,8 @@ class DeleteController extends Controller
         $title = $rule->title;
         $this->ruleRepos->destroy($rule);
 
-        session()->flash('success', (string)trans('firefly.deleted_rule', ['title' => $title]));
-        app('preferences')->mark();
+        session()->flash('success', (string) trans('firefly.deleted_rule', ['title' => $title]));
+        Preferences::mark();
 
         return redirect($this->getPreviousUrl('rules.delete.url'));
     }

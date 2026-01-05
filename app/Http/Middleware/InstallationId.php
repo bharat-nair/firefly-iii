@@ -1,4 +1,5 @@
 <?php
+
 /**
  * InstallationId.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Middleware;
 
+use Closure;
 use FireflyIII\Support\System\GeneratesInstallationId;
 use Illuminate\Http\Request;
 
@@ -40,7 +42,7 @@ class InstallationId
      *
      * @return mixed
      */
-    public function handle($request, \Closure $next)
+    public function handle($request, Closure $next)
     {
         $this->generateInstallationId();
 

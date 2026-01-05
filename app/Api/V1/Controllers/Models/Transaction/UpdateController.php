@@ -1,4 +1,5 @@
 <?php
+
 /*
  * UpdateController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -29,9 +30,12 @@ use FireflyIII\Events\UpdatedTransactionGroup;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface;
+use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Resource\Item;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -69,29 +73,25 @@ class UpdateController extends Controller
      */
     public function update(UpdateRequest $request, TransactionGroup $transactionGroup): JsonResponse
     {
-        app('log')->debug('Now in update routine for transaction group');
-        $data             = $request->getAll();
+        Log::debug('Now in update routine for transaction group');
+        $data              = $request->getAll();
+        $oldHash           = $this->groupRepository->getCompareHash($transactionGroup);
+        $transactionGroup  = $this->groupRepository->update($transactionGroup, $data);
+        $newHash           = $this->groupRepository->getCompareHash($transactionGroup);
+        $manager           = $this->getManager();
 
-        // Fixes 8750.
-        $transactions     = $data['transactions'] ?? [];
-        foreach ($transactions as $index => $info) {
-            unset($data['transactions'][$index]['type']);
-        }
-
-        $transactionGroup = $this->groupRepository->update($transactionGroup, $data);
-        $manager          = $this->getManager();
-
-        app('preferences')->mark();
-        $applyRules       = $data['apply_rules'] ?? true;
-        $fireWebhooks     = $data['fire_webhooks'] ?? true;
-        event(new UpdatedTransactionGroup($transactionGroup, $applyRules, $fireWebhooks));
+        Preferences::mark();
+        $applyRules        = $data['apply_rules'] ?? true;
+        $fireWebhooks      = $data['fire_webhooks'] ?? true;
+        $runRecalculations = $oldHash !== $newHash;
+        event(new UpdatedTransactionGroup($transactionGroup, $applyRules, $fireWebhooks, $runRecalculations));
 
         /** @var User $admin */
-        $admin            = auth()->user();
+        $admin             = auth()->user();
 
         // use new group collector:
         /** @var GroupCollectorInterface $collector */
-        $collector        = app(GroupCollectorInterface::class);
+        $collector         = app(GroupCollectorInterface::class);
         $collector
             ->setUser($admin)
             // filter on transaction group.
@@ -100,15 +100,20 @@ class UpdateController extends Controller
             ->withAPIInformation()
         ;
 
-        $selectedGroup    = $collector->getGroups()->first();
+        $selectedGroup     = $collector->getGroups()->first();
         if (null === $selectedGroup) {
             throw new NotFoundHttpException();
         }
 
+        // enrich
+        $enrichment        = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $selectedGroup     = $enrichment->enrichSingle($selectedGroup);
+
         /** @var TransactionGroupTransformer $transformer */
-        $transformer      = app(TransactionGroupTransformer::class);
+        $transformer       = app(TransactionGroupTransformer::class);
         $transformer->setParameters($this->parameters);
-        $resource         = new Item($selectedGroup, $transformer, 'transactions');
+        $resource          = new Item($selectedGroup, $transformer, 'transactions');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

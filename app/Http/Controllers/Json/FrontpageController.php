@@ -23,11 +23,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Json;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
 use Illuminate\Http\JsonResponse;
+use Throwable;
 
 /**
  * Class FrontpageController.
@@ -44,34 +46,53 @@ class FrontpageController extends Controller
         $set  = $repository->getPiggyBanks();
         $info = [];
 
+
         /** @var PiggyBank $piggyBank */
         foreach ($set as $piggyBank) {
-            $amount = $repository->getCurrentAmount($piggyBank);
+            $amount   = $repository->getCurrentAmount($piggyBank);
+            $pcAmount = $repository->getCurrentPrimaryCurrencyAmount($piggyBank);
             if (1 === bccomp($amount, '0')) {
                 // percentage!
                 $pct    = 0;
-                if (0 !== bccomp($piggyBank->targetamount, '0')) {
-                    $pct = (int)bcmul(bcdiv($amount, $piggyBank->targetamount), '100');
+                if (0 !== bccomp((string) $piggyBank->target_amount, '0')) {
+                    $pct = (int) bcmul(bcdiv($amount, (string) $piggyBank->target_amount), '100');
                 }
 
                 $entry  = [
-                    'id'         => $piggyBank->id,
-                    'name'       => $piggyBank->name,
-                    'amount'     => $amount,
-                    'target'     => $piggyBank->targetamount,
-                    'percentage' => $pct,
+                    'id'                              => $piggyBank->id,
+                    'name'                            => $piggyBank->name,
+                    'amount'                          => $amount,
+                    'pc_amount'                       => $pcAmount,
+                    'target'                          => $piggyBank->target_amount,
+                    'pc_target'                       => $piggyBank->native_target_amount,
+                    'percentage'                      => $pct,
+                    // currency:
+                    'currency_symbol'                 => $piggyBank->transactionCurrency->symbol,
+                    'currency_decimal_places'         => $piggyBank->transactionCurrency->decimal_places,
+                    'primary_currency_symbol'         => $this->primaryCurrency->symbol,
+                    'primary_currency_decimal_places' => $this->primaryCurrency->decimal_places,
+
                 ];
 
                 $info[] = $entry;
             }
         }
+
+        // sort by current percentage (lowest at the top)
+        uasort(
+            $info,
+            static fn (array $a, array $b): int => $a['percentage'] <=> $b['percentage']
+        );
+
         $html = '';
         if (0 !== count($info)) {
             try {
-                $html = view('json.piggy-banks', compact('info'))->render();
-            } catch (\Throwable $e) {
-                app('log')->error(sprintf('Cannot render json.piggy-banks: %s', $e->getMessage()));
-                app('log')->error($e->getTraceAsString());
+                $convertToPrimary = $this->convertToPrimary;
+                $primary          = $this->primaryCurrency;
+                $html             = view('json.piggy-banks', ['info' => $info, 'convertToPrimary' => $convertToPrimary, 'primary' => $primary])->render();
+            } catch (Throwable $e) {
+                Log::error(sprintf('Cannot render json.piggy-banks: %s', $e->getMessage()));
+                Log::error($e->getTraceAsString());
                 $html = 'Could not render view.';
 
                 throw new FireflyException($html, 0, $e);

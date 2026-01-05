@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Recurrence.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,9 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
+use FireflyIII\Casts\SeparateTimezoneCaster;
+use FireflyIII\Handlers\Observer\RecurrenceObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,34 +40,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * @mixin IdeHelperRecurrence
+ * @property Carbon      $first_date
+ * @property null|Carbon $latest_date
  */
+#[ObservedBy([RecurrenceObserver::class])]
 class Recurrence extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                     = [
-            'created_at'   => 'datetime',
-            'updated_at'   => 'datetime',
-            'deleted_at'   => 'datetime',
-            'title'        => 'string',
-            'id'           => 'int',
-            'description'  => 'string',
-            'first_date'   => 'date',
-            'repeat_until' => 'date',
-            'latest_date'  => 'date',
-            'repetitions'  => 'int',
-            'active'       => 'bool',
-            'apply_rules'  => 'bool',
-        ];
-
     protected $fillable
-                     = ['user_id', 'transaction_type_id', 'title', 'description', 'first_date', 'repeat_until', 'latest_date', 'repetitions', 'apply_rules', 'active'];
+                     = ['user_id', 'user_group_id', 'transaction_type_id', 'title', 'description', 'first_date', 'first_date_tz', 'repeat_until', 'repeat_until_tz', 'latest_date', 'latest_date_tz', 'repetitions', 'apply_rules', 'active'];
 
-    /** @var string The table to store the data in */
     protected $table = 'recurrences';
 
     /**
@@ -131,10 +121,30 @@ class Recurrence extends Model
         return $this->belongsTo(TransactionType::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'title'         => 'string',
+            'id'            => 'int',
+            'description'   => 'string',
+            'first_date'    => SeparateTimezoneCaster::class,
+            'repeat_until'  => SeparateTimezoneCaster::class,
+            'latest_date'   => SeparateTimezoneCaster::class,
+            'repetitions'   => 'int',
+            'active'        => 'bool',
+            'apply_rules'   => 'bool',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
+    }
+
     protected function transactionTypeId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

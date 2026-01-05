@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\ObjectGroup;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Repositories\ObjectGroup\ObjectGroupRepositoryInterface;
@@ -48,7 +49,7 @@ class DeleteController extends Controller
         $this->middleware(
             function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-envelope-o');
-                app('view')->share('title', (string)trans('firefly.object_groups_page_title'));
+                app('view')->share('title', (string) trans('firefly.object_groups_page_title'));
 
                 $this->repository = app(ObjectGroupRepositoryInterface::class);
 
@@ -59,18 +60,16 @@ class DeleteController extends Controller
 
     /**
      * Delete a piggy bank.
-     *
-     * @return Factory|View
      */
-    public function delete(ObjectGroup $objectGroup)
+    public function delete(ObjectGroup $objectGroup): Factory|View
     {
-        $subTitle   = (string)trans('firefly.delete_object_group', ['title' => $objectGroup->title]);
+        $subTitle   = (string) trans('firefly.delete_object_group', ['title' => $objectGroup->title]);
         $piggyBanks = $objectGroup->piggyBanks()->count();
 
         // put previous url in session
         $this->rememberPreviousUrl('object-groups.delete.url');
 
-        return view('object-groups.delete', compact('objectGroup', 'subTitle', 'piggyBanks'));
+        return view('object-groups.delete', ['objectGroup' => $objectGroup, 'subTitle' => $subTitle, 'piggyBanks' => $piggyBanks]);
     }
 
     /**
@@ -78,8 +77,8 @@ class DeleteController extends Controller
      */
     public function destroy(ObjectGroup $objectGroup): RedirectResponse
     {
-        session()->flash('success', (string)trans('firefly.deleted_object_group', ['title' => $objectGroup->title]));
-        app('preferences')->mark();
+        session()->flash('success', (string) trans('firefly.deleted_object_group', ['title' => $objectGroup->title]));
+        Preferences::mark();
         $this->repository->destroy($objectGroup);
 
         return redirect($this->getPreviousUrl('object-groups.delete.url'));

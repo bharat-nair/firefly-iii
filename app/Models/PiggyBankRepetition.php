@@ -24,81 +24,85 @@ declare(strict_types=1);
 namespace FireflyIII\Models;
 
 use Carbon\Carbon;
+use FireflyIII\Casts\SeparateTimezoneCaster;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * @mixin IdeHelperPiggyBankRepetition
- */
 class PiggyBankRepetition extends Model
 {
     use ReturnsIntegerIdTrait;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'startdate'  => 'date',
-            'targetdate' => 'date',
-        ];
-
-    protected $fillable = ['piggy_bank_id', 'startdate', 'targetdate', 'currentamount'];
+    protected $fillable = ['piggy_bank_id', 'start_date', 'start_date_tz', 'target_date', 'target_date_tz', 'current_amount'];
 
     public function piggyBank(): BelongsTo
     {
         return $this->belongsTo(PiggyBank::class);
     }
 
-    public function scopeOnDates(EloquentBuilder $query, Carbon $start, Carbon $target): EloquentBuilder
-    {
-        return $query->where('startdate', $start->format('Y-m-d'))->where('targetdate', $target->format('Y-m-d'));
-    }
-
-    /**
-     * @return EloquentBuilder
-     */
-    public function scopeRelevantOnDate(EloquentBuilder $query, Carbon $date)
-    {
-        return $query->where(
-            static function (EloquentBuilder $q) use ($date): void {
-                $q->where('startdate', '<=', $date->format('Y-m-d 00:00:00'));
-                $q->orWhereNull('startdate');
-            }
-        )
-            ->where(
-                static function (EloquentBuilder $q) use ($date): void {
-                    $q->where('targetdate', '>=', $date->format('Y-m-d 00:00:00'));
-                    $q->orWhereNull('targetdate');
-                }
-            )
-        ;
-    }
-
     /**
      * @param mixed $value
      */
-    public function setCurrentamountAttribute($value): void
+    public function setCurrentAmountAttribute($value): void
     {
-        $this->attributes['currentamount'] = (string)$value;
+        $this->attributes['current_amount'] = (string)$value;
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'      => 'datetime',
+            'updated_at'      => 'datetime',
+            'start_date'      => SeparateTimezoneCaster::class,
+            'target_date'     => SeparateTimezoneCaster::class,
+            'virtual_balance' => 'string',
+        ];
     }
 
     /**
      * Get the amount
      */
-    protected function currentamount(): Attribute
+    protected function currentAmount(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
         );
+    }
+
+    #[Scope]
+    protected function onDates(EloquentBuilder $query, Carbon $start, Carbon $target): EloquentBuilder
+    {
+        return $query->where('start_date', $start->format('Y-m-d'))->where('target_date', $target->format('Y-m-d'));
     }
 
     protected function piggyBankId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
+    }
+
+    /**
+     * @return EloquentBuilder
+     */
+    #[Scope]
+    protected function relevantOnDate(EloquentBuilder $query, Carbon $date)
+    {
+        return $query->where(
+            static function (EloquentBuilder $q) use ($date): void {
+                $q->where('start_date', '<=', $date->format('Y-m-d 00:00:00'));
+                $q->orWhereNull('start_date');
+            }
+        )
+            ->where(
+                static function (EloquentBuilder $q) use ($date): void {
+                    $q->where('target_date', '>=', $date->format('Y-m-d 00:00:00'));
+                    $q->orWhereNull('target_date');
+                }
+            )
+        ;
     }
 }

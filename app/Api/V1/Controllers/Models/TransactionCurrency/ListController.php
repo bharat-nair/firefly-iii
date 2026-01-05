@@ -25,14 +25,11 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\TransactionCurrency;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Bill;
 use FireflyIII\Models\Recurrence;
-use FireflyIII\Models\RecurrenceTransaction;
 use FireflyIII\Models\Rule;
-use FireflyIII\Models\RuleTrigger;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
@@ -42,6 +39,11 @@ use FireflyIII\Repositories\Recurring\RecurringRepositoryInterface;
 use FireflyIII\Repositories\Rule\RuleRepositoryInterface;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use FireflyIII\Support\Http\Api\TransactionFilter;
+use FireflyIII\Support\JsonApi\Enrichments\AccountEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\BudgetLimitEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\RecurringEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\SubscriptionEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\AccountTransformer;
 use FireflyIII\Transformers\AvailableBudgetTransformer;
 use FireflyIII\Transformers\BillTransformer;
@@ -68,8 +70,6 @@ class ListController extends Controller
      * This endpoint is documented at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listAccountByCurrency
      * Display a list of accounts.
-     *
-     * @throws FireflyException
      */
     public function accounts(Request $request, TransactionCurrency $currency): JsonResponse
     {
@@ -90,8 +90,8 @@ class ListController extends Controller
 
         // filter list on currency preference:
         $collection        = $unfiltered->filter(
-            static function (Account $account) use ($currency, $accountRepository) {
-                $currencyId = (int)$accountRepository->getMetaValue($account, 'currency_id');
+            static function (Account $account) use ($currency, $accountRepository): bool {
+                $currencyId = (int) $accountRepository->getMetaValue($account, 'currency_id');
 
                 return $currencyId === $currency->id;
             }
@@ -99,6 +99,21 @@ class ListController extends Controller
 
         $count             = $collection->count();
         $accounts          = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // #11007 go to the end of the previous day.
+        $this->parameters->set('start', $this->parameters->get('start')?->subSecond());
+        // #11018 also end of the day.
+        $this->parameters->set('end', $this->parameters->get('end')?->endOfDay());
+
+        // enrich
+        /** @var User $admin */
+        $admin             = auth()->user();
+        $enrichment        = new AccountEnrichment();
+        $enrichment->setDate($this->parameters->get('date'));
+        $enrichment->setStart($this->parameters->get('start'));
+        $enrichment->setEnd($this->parameters->get('end'));
+        $enrichment->setUser($admin);
+        $accounts          = $enrichment->enrich($accounts);
 
         // make paginator:
         $paginator         = new LengthAwarePaginator($accounts, $count, $pageSize, $this->parameters->get('page'));
@@ -118,8 +133,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listAvailableBudgetByCurrency
      *
      * Display a listing of the resource.
-     *
-     * @throws FireflyException
      */
     public function availableBudgets(TransactionCurrency $currency): JsonResponse
     {
@@ -153,8 +166,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listBillByCurrency
      *
      * List all bills
-     *
-     * @throws FireflyException
      */
     public function bills(TransactionCurrency $currency): JsonResponse
     {
@@ -167,12 +178,19 @@ class ListController extends Controller
 
         // filter and paginate list:
         $collection  = $unfiltered->filter(
-            static function (Bill $bill) use ($currency) {
-                return $bill->transaction_currency_id === $currency->id;
-            }
+            static fn (Bill $bill): bool => $bill->transaction_currency_id === $currency->id
         );
         $count       = $collection->count();
         $bills       = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new SubscriptionEnrichment();
+        $enrichment->setUser($admin);
+        $enrichment->setStart($this->parameters->get('start'));
+        $enrichment->setEnd($this->parameters->get('end'));
+        $bills       = $enrichment->enrich($bills);
 
         // make paginator:
         $paginator   = new LengthAwarePaginator($bills, $count, $pageSize, $this->parameters->get('page'));
@@ -193,8 +211,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listBudgetLimitByCurrency
      *
      * List all budget limits
-     *
-     * @throws FireflyException
      */
     public function budgetLimits(TransactionCurrency $currency): JsonResponse
     {
@@ -208,6 +224,13 @@ class ListController extends Controller
         $budgetLimits = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
         $paginator    = new LengthAwarePaginator($budgetLimits, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.currencies.budget-limits', [$currency->code]).$this->buildParams());
+
+        // enrich
+        /** @var User $admin */
+        $admin        = auth()->user();
+        $enrichment   = new BudgetLimitEnrichment();
+        $enrichment->setUser($admin);
+        $budgetLimits = $enrichment->enrich($budgetLimits);
 
         /** @var BudgetLimitTransformer $transformer */
         $transformer  = app(BudgetLimitTransformer::class);
@@ -224,8 +247,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listRecurrenceByCurrency
      *
      * List all recurring transactions.
-     *
-     * @throws FireflyException
      */
     public function recurrences(TransactionCurrency $currency): JsonResponse
     {
@@ -236,33 +257,37 @@ class ListController extends Controller
         // get list of budgets. Count it and split it.
         /** @var RecurringRepositoryInterface $recurringRepos */
         $recurringRepos = app(RecurringRepositoryInterface::class);
-        $unfiltered     = $recurringRepos->getAll();
+        $unfiltered     = $recurringRepos->get();
 
         // filter selection
-        $collection     = $unfiltered->filter( // @phpstan-ignore-line
-            static function (Recurrence $recurrence) use ($currency) {  // @phpstan-ignore-line
-                /** @var RecurrenceTransaction $transaction */
-                foreach ($recurrence->recurrenceTransactions as $transaction) {
-                    if ($transaction->transaction_currency_id === $currency->id || $transaction->foreign_currency_id === $currency->id) {
-                        return $recurrence;
-                    }
+        $collection     = $unfiltered->filter(
+            static function (Recurrence $recurrence) use ($currency): ?Recurrence {  // @phpstan-ignore-line
+                if (array_any($recurrence->recurrenceTransactions, fn ($transaction): bool => $transaction->transaction_currency_id === $currency->id || $transaction->foreign_currency_id === $currency->id)) {
+                    return $recurrence;
                 }
 
                 return null;
             }
         );
         $count          = $collection->count();
-        $piggyBanks     = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $recurrences    = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // enrich
+        /** @var User $admin */
+        $admin          = auth()->user();
+        $enrichment     = new RecurringEnrichment();
+        $enrichment->setUser($admin);
+        $recurrences    = $enrichment->enrich($recurrences);
 
         // make paginator:
-        $paginator      = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
+        $paginator      = new LengthAwarePaginator($recurrences, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.currencies.recurrences', [$currency->code]).$this->buildParams());
 
         /** @var RecurrenceTransformer $transformer */
         $transformer    = app(RecurrenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource       = new FractalCollection($piggyBanks, $transformer, 'recurrences');
+        $resource       = new FractalCollection($recurrences, $transformer, 'recurrences');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -273,8 +298,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listRuleByCurrency
      *
      * List all of them.
-     *
-     * @throws FireflyException
      */
     public function rules(TransactionCurrency $currency): JsonResponse
     {
@@ -286,13 +309,10 @@ class ListController extends Controller
         $ruleRepos   = app(RuleRepositoryInterface::class);
         $unfiltered  = $ruleRepos->getAll();
 
-        $collection  = $unfiltered->filter( // @phpstan-ignore-line
-            static function (Rule $rule) use ($currency) { // @phpstan-ignore-line
-                /** @var RuleTrigger $trigger */
-                foreach ($rule->ruleTriggers as $trigger) {
-                    if ('currency_is' === $trigger->trigger_type && $currency->name === $trigger->trigger_value) {
-                        return $rule;
-                    }
+        $collection  = $unfiltered->filter(
+            static function (Rule $rule) use ($currency): ?Rule { // @phpstan-ignore-line
+                if (array_any($rule->ruleTriggers, fn ($trigger): bool => 'currency_is' === $trigger->trigger_type && $currency->name === $trigger->trigger_value)) {
+                    return $rule;
                 }
 
                 return null;
@@ -321,8 +341,6 @@ class ListController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listTransactionByCurrency
      *
      * Show all transactions.
-     *
-     * @throws FireflyException
      */
     public function transactions(Request $request, TransactionCurrency $currency): JsonResponse
     {
@@ -360,7 +378,11 @@ class ListController extends Controller
         }
         $paginator    = $collector->getPaginatedGroups();
         $paginator->setPath(route('api.v1.currencies.transactions', [$currency->code]).$this->buildParams());
-        $transactions = $paginator->getCollection();
+
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $transactions = $enrichment->enrich($paginator->getCollection());
 
         /** @var TransactionGroupTransformer $transformer */
         $transformer  = app(TransactionGroupTransformer::class);

@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\Note;
@@ -39,15 +40,10 @@ class AppendDescriptionToNotes implements ActionInterface
 {
     use RefreshNotesTrait;
 
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -56,8 +52,8 @@ class AppendDescriptionToNotes implements ActionInterface
         /** @var null|TransactionJournal $object */
         $object = TransactionJournal::where('user_id', $journal['user_id'])->find($journal['transaction_journal_id']);
         if (null === $object) {
-            app('log')->error(sprintf('No journal #%d belongs to user #%d.', $journal['transaction_journal_id'], $journal['user_id']));
-            event(new RuleActionFailedOnArray($this->action, $journal, (string)trans('rules.journal_other_user')));
+            Log::error(sprintf('No journal #%d belongs to user #%d.', $journal['transaction_journal_id'], $journal['user_id']));
+            event(new RuleActionFailedOnArray($this->action, $journal, (string) trans('rules.journal_other_user')));
 
             return false;
         }
@@ -72,7 +68,7 @@ class AppendDescriptionToNotes implements ActionInterface
             $note->text = trim(sprintf("%s  \n%s", $note->text, $object->description));
         }
         if ('' === $note->text) {
-            $note->text = (string)$object->description;
+            $note->text = (string) $object->description;
         }
         $after  = $note->text;
 

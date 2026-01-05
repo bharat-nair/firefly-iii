@@ -24,13 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\System;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class UserUpdateRequest
@@ -94,12 +94,12 @@ class UserUpdateRequest extends FormRequest
                 $isAdmin = auth()->user()->hasRole('owner');
                 // not admin, and not own user?
                 if (auth()->check() && false === $isAdmin && $current?->id !== auth()->user()->id) {
-                    $validator->errors()->add('email', (string)trans('validation.invalid_selection'));
+                    $validator->errors()->add('email', (string) trans('validation.invalid_selection'));
                 }
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

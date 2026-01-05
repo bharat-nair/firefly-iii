@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ValidRecurrenceRepetitionValue.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,8 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
+use InvalidArgumentException;
 
 /**
  * Class ValidRecurrenceRepetitionValue
@@ -32,11 +36,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
 class ValidRecurrenceRepetitionValue implements ValidationRule
 {
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $value = (string)$value;
+        $value = (string) $value;
 
         if ('daily' === $value) {
             return;
@@ -67,7 +71,7 @@ class ValidRecurrenceRepetitionValue implements ValidationRule
 
     private function validateMonthly(string $value): bool
     {
-        $dayOfMonth = (int)substr($value, 8);
+        $dayOfMonth = (int) substr($value, 8);
 
         return $dayOfMonth > 0 && $dayOfMonth < 32;
     }
@@ -78,8 +82,8 @@ class ValidRecurrenceRepetitionValue implements ValidationRule
         if (2 !== count($parameters)) {
             return false;
         }
-        $nthDay     = (int)($parameters[0] ?? 0.0);
-        $dayOfWeek  = (int)($parameters[1] ?? 0.0);
+        $nthDay     = (int) $parameters[0];
+        $dayOfWeek  = (int) $parameters[1];
         if ($nthDay < 1 || $nthDay > 5) {
             return false;
         }
@@ -89,7 +93,7 @@ class ValidRecurrenceRepetitionValue implements ValidationRule
 
     private function validateWeekly(string $value): bool
     {
-        $dayOfWeek = (int)substr($value, 7);
+        $dayOfWeek = (int) substr($value, 7);
 
         return $dayOfWeek > 0 && $dayOfWeek < 8;
     }
@@ -101,8 +105,8 @@ class ValidRecurrenceRepetitionValue implements ValidationRule
 
         try {
             Carbon::createFromFormat('Y-m-d', $dateString);
-        } catch (\InvalidArgumentException $e) { // @phpstan-ignore-line
-            app('log')->debug(sprintf('Could not parse date %s: %s', $dateString, $e->getMessage()));
+        } catch (InvalidArgumentException $e) {
+            Log::debug(sprintf('Could not parse date %s: %s', $dateString, $e->getMessage()));
 
             return false;
         }

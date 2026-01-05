@@ -1,4 +1,5 @@
 <?php
+
 /*
  * AccountPolicy.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -29,6 +30,16 @@ use Illuminate\Support\Facades\Log;
 
 class AccountPolicy
 {
+    public function create(): bool
+    {
+        return auth()->check();
+    }
+
+    public function viewAccountBalances(User $user, Account $account): bool
+    {
+        return $this->view($user, $account);
+    }
+
     /**
      * TODO needs better authentication, also for group.
      */
@@ -37,15 +48,8 @@ class AccountPolicy
         return auth()->check() && $user->id === $account->user_id;
     }
 
-    public function create(): bool
-    {
-        return auth()->check();
-    }
-
     /**
      * Everybody can do this, but selection should limit to user.
-     *
-     * @return true
      */
     public function viewAny(): bool
     {
@@ -56,15 +60,8 @@ class AccountPolicy
 
     /**
      * Everybody can do this, but selection should limit to user.
-     *
-     * @return true
      */
     public function viewUser(User $user, Account $account): bool
-    {
-        return $this->view($user, $account);
-    }
-
-    public function viewAccountBalances(User $user, Account $account): bool
     {
         return $this->view($user, $account);
     }

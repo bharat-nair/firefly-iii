@@ -1,4 +1,5 @@
 <?php
+
 /*
  * IsFilterValueIn.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -23,23 +24,17 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 class IsFilterValueIn implements ValidationRule
 {
-    private string $key;
-    private array $values;
-
-    public function __construct(string $key, array $values)
-    {
-        $this->key    = $key;
-        $this->values = $values;
-    }
+    public function __construct(private readonly string $key, private readonly array $values) {}
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!is_array($value)) {
             return;

@@ -24,31 +24,31 @@ declare(strict_types=1);
 
 namespace FireflyIII\Exceptions;
 
+use Exception;
 use FireflyIII\Support\Calendar\Periodicity;
+use Throwable;
 
 /**
  * Class IntervalException
  */
-final class IntervalException extends \Exception
+final class IntervalException extends Exception
 {
-    public array       $availableIntervals;
-    public Periodicity $periodicity;
+    public array       $availableIntervals = [];
+    public Periodicity $periodicity        = Periodicity::Monthly;
 
     /** @var mixed */
-    protected $message = 'The periodicity %s is unknown. Choose one of available periodicity: %s';
+    protected $message                     = 'The periodicity %s is unknown. Choose one of available periodicity: %s';
 
-    public function __construct(string $message = '', int $code = 0, ?\Throwable $previous = null)
+    public function __construct(string $message = '', int $code = 0, ?Throwable $previous = null)
     {
         parent::__construct($message, $code, $previous);
-        $this->availableIntervals = [];
-        $this->periodicity        = Periodicity::Monthly;
     }
 
     public static function unavailable(
         Periodicity $periodicity,
         array       $intervals,
         int         $code = 0,
-        ?\Throwable $previous = null
+        ?Throwable $previous = null
     ): self {
         $message                       = sprintf(
             'The periodicity %s is unknown. Choose one of available periodicity: %s',

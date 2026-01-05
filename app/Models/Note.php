@@ -29,20 +29,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @mixin IdeHelperNote
- */
 class Note extends Model
 {
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-        ];
 
     protected $fillable = ['title', 'text', 'noteable_id', 'noteable_type'];
 
@@ -54,10 +44,19 @@ class Note extends Model
         return $this->morphTo();
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+        ];
+    }
+
     protected function noteableId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

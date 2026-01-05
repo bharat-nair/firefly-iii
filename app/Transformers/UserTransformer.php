@@ -1,4 +1,5 @@
 <?php
+
 /**
  * UserTransformer.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,7 +24,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Transformers;
 
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
 
@@ -36,19 +36,17 @@ class UserTransformer extends AbstractTransformer
 
     /**
      * Transform user.
-     *
-     * @throws FireflyException
      */
     public function transform(User $user): array
     {
         $this->repository ??= app(UserRepositoryInterface::class);
 
         return [
-            'id'           => (int)$user->id,
+            'id'           => (int) $user->id,
             'created_at'   => $user->created_at->toAtomString(),
             'updated_at'   => $user->updated_at->toAtomString(),
             'email'        => $user->email,
-            'blocked'      => 1 === (int)$user->blocked,
+            'blocked'      => 1 === (int) $user->blocked,
             'blocked_code' => '' === $user->blocked_code ? null : $user->blocked_code,
             'role'         => $this->repository->getRoleByUser($user),
             'links'        => [

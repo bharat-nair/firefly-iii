@@ -1,4 +1,5 @@
 <?php
+
 /*
  * Webhook.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,21 +24,22 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
-use FireflyIII\Enums\WebhookDelivery;
-use FireflyIII\Enums\WebhookResponse;
-use FireflyIII\Enums\WebhookTrigger;
+use FireflyIII\Enums\WebhookDelivery as WebhookDeliveryEnum;
+use FireflyIII\Enums\WebhookResponse as WebhookResponseEnum;
+use FireflyIII\Enums\WebhookTrigger as WebhookTriggerEnum;
+use FireflyIII\Handlers\Observer\WebhookObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperWebhook
- */
+#[ObservedBy([WebhookObserver::class])]
 class Webhook extends Model
 {
     use ReturnsIntegerIdTrait;
@@ -46,17 +48,19 @@ class Webhook extends Model
 
     protected $casts
                         = [
-            'active'   => 'boolean',
-            'trigger'  => 'integer',
-            'response' => 'integer',
-            'delivery' => 'integer',
+            'active'        => 'boolean',
+            'trigger'       => 'integer',
+            'response'      => 'integer',
+            'delivery'      => 'integer',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
         ];
     protected $fillable = ['active', 'trigger', 'response', 'delivery', 'user_id', 'user_group_id', 'url', 'title', 'secret'];
 
     public static function getDeliveries(): array
     {
         $array = [];
-        $set   = WebhookDelivery::cases();
+        $set   = WebhookDeliveryEnum::cases();
         foreach ($set as $item) {
             $array[$item->value] = $item->name;
         }
@@ -67,7 +71,7 @@ class Webhook extends Model
     public static function getDeliveriesForValidation(): array
     {
         $array = [];
-        $set   = WebhookDelivery::cases();
+        $set   = WebhookDeliveryEnum::cases();
         foreach ($set as $item) {
             $array[$item->name]  = $item->value;
             $array[$item->value] = $item->value;
@@ -79,7 +83,7 @@ class Webhook extends Model
     public static function getResponses(): array
     {
         $array = [];
-        $set   = WebhookResponse::cases();
+        $set   = WebhookResponseEnum::cases();
         foreach ($set as $item) {
             $array[$item->value] = $item->name;
         }
@@ -90,7 +94,7 @@ class Webhook extends Model
     public static function getResponsesForValidation(): array
     {
         $array = [];
-        $set   = WebhookResponse::cases();
+        $set   = WebhookResponseEnum::cases();
         foreach ($set as $item) {
             $array[$item->name]  = $item->value;
             $array[$item->value] = $item->value;
@@ -102,7 +106,7 @@ class Webhook extends Model
     public static function getTriggers(): array
     {
         $array = [];
-        $set   = WebhookTrigger::cases();
+        $set   = WebhookTriggerEnum::cases();
         foreach ($set as $item) {
             $array[$item->value] = $item->name;
         }
@@ -113,7 +117,7 @@ class Webhook extends Model
     public static function getTriggersForValidation(): array
     {
         $array = [];
-        $set   = WebhookTrigger::cases();
+        $set   = WebhookTriggerEnum::cases();
         foreach ($set as $item) {
             $array[$item->name]  = $item->value;
             $array[$item->value] = $item->value;
@@ -150,8 +154,32 @@ class Webhook extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function webhookDeliveries(): BelongsToMany
+    {
+        return $this->belongsToMany(WebhookDelivery::class);
+    }
+
     public function webhookMessages(): HasMany
     {
         return $this->hasMany(WebhookMessage::class);
+    }
+
+    public function webhookResponses(): BelongsToMany
+    {
+        return $this->belongsToMany(WebhookResponse::class);
+    }
+
+    public function webhookTriggers(): BelongsToMany
+    {
+        return $this->belongsToMany(WebhookTrigger::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            //            'delivery' => WebhookDelivery::class,
+            //            'response' => WebhookResponse::class,
+            //            'trigger'  => WebhookTrigger::class,
+        ];
     }
 }

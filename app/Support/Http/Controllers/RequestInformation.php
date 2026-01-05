@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RequestInformation.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Http\Controllers;
 
+use FireflyIII\Support\Facades\Preferences;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\ValidationException;
 use FireflyIII\Http\Requests\RuleFormRequest;
@@ -31,8 +33,11 @@ use FireflyIII\Support\Binder\AccountList;
 use FireflyIII\User;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\Facades\Validator;
-use Route as RouteFacade;
+
+use function Safe\parse_url;
 
 /**
  * Trait RequestInformation
@@ -48,6 +53,22 @@ trait RequestInformation
         $parts = parse_url($url);
 
         return $parts['host'] ?? '';
+    }
+
+    final protected function getPageName(): string // get request info
+    {
+        return str_replace('.', '_', RouteFacade::currentRouteName());
+    }
+
+    /**
+     * Get the specific name of a page for intro.
+     */
+    final protected function getSpecificPageName(): string // get request info
+    {
+        /** @var null|string $param */
+        $param = RouteFacade::current()->parameter('objectType');
+
+        return null === $param ? '' : sprintf('_%s', $param);
     }
 
     /**
@@ -90,29 +111,13 @@ trait RequestInformation
         $shownDemo    = true;
         // both must be array and either must be > 0
         if (count($intro) > 0 || count($specialIntro) > 0) {
-            $shownDemo = app('preferences')->get($key, false)->data;
+            $shownDemo = Preferences::get($key, false)->data;
         }
         if (!is_bool($shownDemo)) {
-            $shownDemo = true;
+            return true;
         }
 
         return $shownDemo;
-    }
-
-    final protected function getPageName(): string // get request info
-    {
-        return str_replace('.', '_', RouteFacade::currentRouteName());
-    }
-
-    /**
-     * Get the specific name of a page for intro.
-     */
-    final protected function getSpecificPageName(): string // get request info
-    {
-        /** @var null|string $param */
-        $param = RouteFacade::current()->parameter('objectType');
-
-        return null === $param ? '' : sprintf('_%s', $param);
     }
 
     /**
@@ -121,20 +126,16 @@ trait RequestInformation
     final protected function notInSessionRange(Carbon $date): bool // Validate a preference
     {
         /** @var Carbon $start */
-        $start  = session('start', today(config('app.timezone'))->startOfMonth());
+        $start = session('start', today(config('app.timezone'))->startOfMonth());
 
         /** @var Carbon $end */
-        $end    = session('end', today(config('app.timezone'))->endOfMonth());
-        $result = false;
+        $end   = session('end', today(config('app.timezone'))->endOfMonth());
         if ($start->greaterThanOrEqualTo($date) && $end->greaterThanOrEqualTo($date)) {
-            $result = true;
-        }
-        // start and end in the past? use $end
-        if ($start->lessThanOrEqualTo($date) && $end->lessThanOrEqualTo($date)) {
-            $result = true;
+            return true;
         }
 
-        return $result;
+        // start and end in the past? use $end
+        return $start->lessThanOrEqualTo($date) && $end->lessThanOrEqualTo($date);
     }
 
     /**
@@ -145,14 +146,14 @@ trait RequestInformation
         $attributes['location'] ??= '';
         $attributes['accounts']  = AccountList::routeBinder($attributes['accounts'] ?? '', new Route('get', '', []));
         $date                    = Carbon::createFromFormat('Ymd', $attributes['startDate']);
-        if (null === $date) {
+        if (!$date instanceof Carbon) {
             $date = today(config('app.timezone'));
         }
         $date->startOfMonth();
         $attributes['startDate'] = $date;
 
         $date2                   = Carbon::createFromFormat('Ymd', $attributes['endDate']);
-        if (null === $date2) {
+        if (!$date2 instanceof Carbon) {
             $date2 = today(config('app.timezone'));
         }
         $date2->endOfDay();
@@ -168,7 +169,7 @@ trait RequestInformation
      */
     final protected function validatePassword(User $user, string $current, string $new): bool // get request info
     {
-        if (!\Hash::check($current, $user->password)) {
+        if (!Hash::check($current, $user->password)) {
             throw new ValidationException((string)trans('firefly.invalid_current_password'));
         }
 

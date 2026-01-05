@@ -23,34 +23,29 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\RuleGroupObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * @mixin IdeHelperRuleGroup
+ * @property User       $user
+ * @property Collection $rules
  */
+#[ObservedBy([RuleGroupObserver::class])]
 class RuleGroup extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                        = [
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'deleted_at'      => 'datetime',
-            'active'          => 'boolean',
-            'stop_processing' => 'boolean',
-            'order'           => 'int',
-        ];
 
     protected $fillable = ['user_id', 'user_group_id', 'stop_processing', 'order', 'title', 'description', 'active'];
 
@@ -87,10 +82,24 @@ class RuleGroup extends Model
         return $this->hasMany(Rule::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'      => 'datetime',
+            'updated_at'      => 'datetime',
+            'deleted_at'      => 'datetime',
+            'active'          => 'boolean',
+            'stop_processing' => 'boolean',
+            'order'           => 'int',
+            'user_id'         => 'integer',
+            'user_group_id'   => 'integer',
+        ];
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

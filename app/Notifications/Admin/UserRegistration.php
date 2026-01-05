@@ -24,12 +24,17 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\Admin;
 
-use FireflyIII\Support\Notifications\UrlValidator;
+use FireflyIII\Notifications\Notifiables\OwnerNotifiable;
+use FireflyIII\Notifications\ReturnsAvailableChannels;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Request;
+use NotificationChannels\Pushover\PushoverMessage;
 
 /**
  * Class UserRegistration
@@ -38,78 +43,73 @@ class UserRegistration extends Notification
 {
     use Queueable;
 
-    private User $user;
+    public function __construct(private User $user) {}
 
     /**
-     * Create a new notification instance.
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function __construct(User $user)
-    {
-        $this->user = $user;
-    }
-
-    /**
-     * Get the array representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function toArray($notifiable)
+    public function toArray(OwnerNotifiable $notifiable): array
     {
         return [
         ];
     }
 
     /**
-     * Get the mail representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return MailMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toMail($notifiable)
+    public function toMail(OwnerNotifiable $notifiable): MailMessage
     {
-        return (new MailMessage())
-            ->markdown('emails.registered-admin', ['email' => $this->user->email, 'id' => $this->user->id])
-            ->subject((string)trans('email.registered_subject_admin'))
+        $ip        = Request::ip();
+        $host      = Steam::getHostName($ip);
+        $userAgent = Request::userAgent();
+        $time      = now(config('app.timezone'))->isoFormat((string) trans('config.date_time_js'));
+
+        return new MailMessage()
+            ->markdown('emails.registered-admin', ['email' => $this->user->email, 'id' => $this->user->id, 'ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])
+            ->subject((string) trans('email.registered_subject_admin'))
+        ;
+    }
+
+    //    /**
+    //     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+    //     */
+    //    public function toNtfy(OwnerNotifiable $notifiable): Message
+    //    {
+    //        Log::debug('Now in toNtfy() for (Admin) UserRegistration');
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'owner', null);
+    //        $message  = new Message();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->title((string) trans('email.registered_subject_admin'));
+    //        $message->body((string) trans('email.admin_new_user_registered', ['email' => $this->user->email, 'invitee' => $this->user->email]));
+    //
+    //        return $message;
+    //    }
+
+    /**
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     */
+    public function toPushover(OwnerNotifiable $notifiable): PushoverMessage
+    {
+        Log::debug('Now in toPushover() for UserRegistration');
+
+        return PushoverMessage::create((string) trans('email.admin_new_user_registered', ['email' => $this->user->email, 'invitee' => $this->user->email]))
+            ->title((string) trans('email.registered_subject_admin'))
         ;
     }
 
     /**
-     * Get the Slack representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return SlackMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toSlack($notifiable)
+    public function toSlack(OwnerNotifiable $notifiable): SlackMessage
     {
-        return (new SlackMessage())->content((string)trans('email.admin_new_user_registered', ['email' => $this->user->email, 'id' => $this->user->id]));
+        return new SlackMessage()->content((string) trans('email.admin_new_user_registered', ['email' => $this->user->email, 'id' => $this->user->id]));
     }
 
     /**
-     * Get the notification's delivery channels.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function via($notifiable)
+    public function via(OwnerNotifiable $notifiable): array
     {
-        $slackUrl = app('fireflyconfig')->get('slack_webhook_url', '')->data;
-        if (UrlValidator::isValidWebhookURL($slackUrl)) {
-            return ['mail', 'slack'];
-        }
-
-        return ['mail'];
+        return ReturnsAvailableChannels::returnChannels('owner');
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ShowController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -24,10 +25,11 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\PiggyBank;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
+use FireflyIII\Support\JsonApi\Enrichments\PiggyBankEnrichment;
 use FireflyIII\Transformers\PiggyBankTransformer;
+use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
@@ -62,8 +64,6 @@ class ShowController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/piggy_banks/listPiggyBank
      *
      * List all of them.
-     *
-     * @throws FireflyException
      */
     public function index(): JsonResponse
     {
@@ -71,10 +71,17 @@ class ShowController extends Controller
         // types to get, page size:
         $pageSize    = $this->parameters->get('limit');
 
-        // get list of budgets. Count it and split it.
+        // get list of piggy banks. Count it and split it.
         $collection  = $this->repository->getPiggyBanks();
         $count       = $collection->count();
         $piggyBanks  = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new PiggyBankEnrichment();
+        $enrichment->setUser($admin);
+        $piggyBanks  = $enrichment->enrich($piggyBanks);
 
         // make paginator:
         $paginator   = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
@@ -84,7 +91,7 @@ class ShowController extends Controller
         $transformer = app(PiggyBankTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource    = new FractalCollection($piggyBanks, $transformer, 'piggy_banks');
+        $resource    = new FractalCollection($piggyBanks, $transformer, 'piggy-banks');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -100,11 +107,19 @@ class ShowController extends Controller
     {
         $manager     = $this->getManager();
 
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new PiggyBankEnrichment();
+        $enrichment->setUser($admin);
+        $piggyBank   = $enrichment->enrichSingle($piggyBank);
+
+
         /** @var PiggyBankTransformer $transformer */
         $transformer = app(PiggyBankTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource    = new Item($piggyBank, $transformer, 'piggy_banks');
+        $resource    = new Item($piggyBank, $transformer, 'piggy-banks');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }

@@ -1,4 +1,5 @@
 <?php
+
 /*
  * SetDestinationToCashAccount.php
  * Copyright (c) 2023 james@firefly-iii.org
@@ -23,29 +24,26 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class SetDestinationToCashAccount
  */
 class SetDestinationToCashAccount implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -53,18 +51,18 @@ class SetDestinationToCashAccount implements ActionInterface
         $user        = User::find($journal['user_id']);
 
         /** @var null|TransactionJournal $object */
-        $object      = $user->transactionJournals()->find((int)$journal['transaction_journal_id']);
+        $object      = $user->transactionJournals()->find((int) $journal['transaction_journal_id']);
         $repository  = app(AccountRepositoryInterface::class);
 
         if (null === $object) {
-            app('log')->error('Could not find journal.');
+            Log::error('Could not find journal.');
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.no_such_journal')));
 
             return false;
         }
         $type        = $object->transactionType->type;
-        if (TransactionType::WITHDRAWAL !== $type) {
-            app('log')->error('Transaction must be withdrawal.');
+        if (TransactionTypeEnum::WITHDRAWAL->value !== $type) {
+            Log::error('Transaction must be withdrawal.');
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.not_withdrawal')));
 
             return false;
@@ -78,20 +76,20 @@ class SetDestinationToCashAccount implements ActionInterface
         /** @var null|Transaction $source */
         $source      = $object->transactions()->where('amount', '<', 0)->first();
         if (null === $source) {
-            app('log')->error('Could not find source transaction.');
+            Log::error('Could not find source transaction.');
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.cannot_find_source_transaction')));
 
             return false;
         }
         // account must not be deleted (in the meantime):
         if (null === $source->account) {
-            app('log')->error('Could not find source transaction account.');
+            Log::error('Could not find source transaction account.');
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.cannot_find_source_transaction_account')));
 
             return false;
         }
         if ($cashAccount->id === $source->account_id) {
-            app('log')->error(
+            Log::error(
                 sprintf(
                     'New destination account ID #%d and current source account ID #%d are the same. Do nothing.',
                     $cashAccount->id,
@@ -107,13 +105,13 @@ class SetDestinationToCashAccount implements ActionInterface
         event(new TriggeredAuditLog($this->action->rule, $object, 'set_destination', null, $cashAccount->name));
 
         // update destination transaction with new destination account:
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $object->id)
             ->where('amount', '>', 0)
             ->update(['account_id' => $cashAccount->id])
         ;
 
-        app('log')->debug(sprintf('Updated journal #%d (group #%d) and gave it new destination account ID.', $object->id, $object->transaction_group_id));
+        Log::debug(sprintf('Updated journal #%d (group #%d) and gave it new destination account ID.', $object->id, $object->transaction_group_id));
 
         return true;
     }

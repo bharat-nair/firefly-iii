@@ -23,38 +23,30 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
-use FireflyIII\Events\Model\BudgetLimit\Created;
-use FireflyIII\Events\Model\BudgetLimit\Deleted;
-use FireflyIII\Events\Model\BudgetLimit\Updated;
+use Carbon\Carbon;
+use FireflyIII\Casts\SeparateTimezoneCaster;
+use FireflyIII\Handlers\Observer\BudgetLimitObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * @mixin IdeHelperBudgetLimit
+ * Class BudgetLimit
+ *
+ * @property TransactionCurrency $transactionCurrency
+ * @property Carbon              $start_date
+ * @property null|Carbon         $end_date
  */
+#[ObservedBy([BudgetLimitObserver::class])]
 class BudgetLimit extends Model
 {
     use ReturnsIntegerIdTrait;
 
-    protected $casts
-                        = [
-            'created_at'  => 'datetime',
-            'updated_at'  => 'datetime',
-            'start_date'  => 'date',
-            'end_date'    => 'date',
-            'auto_budget' => 'boolean',
-        ];
-    protected $dispatchesEvents
-                        = [
-            'created' => Created::class,
-            'updated' => Updated::class,
-            'deleted' => Deleted::class,
-        ];
-
-    protected $fillable = ['budget_id', 'start_date', 'end_date', 'amount', 'transaction_currency_id'];
+    protected $fillable = ['budget_id', 'start_date', 'end_date', 'start_date_tz', 'end_date_tz', 'amount', 'transaction_currency_id', 'native_amount'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -83,6 +75,14 @@ class BudgetLimit extends Model
         return $this->belongsTo(Budget::class);
     }
 
+    /**
+     * Get all the notes.
+     */
+    public function notes(): MorphMany
+    {
+        return $this->morphMany(Note::class, 'noteable');
+    }
+
     public function transactionCurrency(): BelongsTo
     {
         return $this->belongsTo(TransactionCurrency::class);
@@ -94,21 +94,34 @@ class BudgetLimit extends Model
     protected function amount(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
         );
     }
 
     protected function budgetId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'start_date'    => SeparateTimezoneCaster::class,
+            'end_date'      => SeparateTimezoneCaster::class,
+            'auto_budget'   => 'boolean',
+            'amount'        => 'string',
+            'native_amount' => 'string',
+        ];
     }
 
     protected function transactionCurrencyId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

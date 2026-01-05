@@ -23,9 +23,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\RuleObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,27 +36,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * @mixin IdeHelperRule
+ * @property User $user
  */
+#[ObservedBy([RuleObserver::class])]
 class Rule extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'deleted_at'      => 'datetime',
-            'active'          => 'boolean',
-            'order'           => 'int',
-            'stop_processing' => 'boolean',
-            'id'              => 'int',
-            'strict'          => 'boolean',
-        ];
-
-    protected $fillable = ['rule_group_id', 'order', 'active', 'title', 'description', 'user_id', 'strict'];
+    protected $fillable = ['rule_group_id', 'order', 'active', 'title', 'description', 'user_id', 'user_group_id', 'strict'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -99,30 +90,43 @@ class Rule extends Model
         return $this->hasMany(RuleTrigger::class);
     }
 
-    /**
-     * @param mixed $value
-     */
-    public function setDescriptionAttribute($value): void
-    {
-        $this->attributes['description'] = e($value);
-    }
-
     public function userGroup(): BelongsTo
     {
         return $this->belongsTo(UserGroup::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'      => 'datetime',
+            'updated_at'      => 'datetime',
+            'deleted_at'      => 'datetime',
+            'active'          => 'boolean',
+            'order'           => 'int',
+            'stop_processing' => 'boolean',
+            'id'              => 'int',
+            'strict'          => 'boolean',
+            'user_id'         => 'integer',
+            'user_group_id'   => 'integer',
+        ];
+    }
+
+    protected function description(): Attribute
+    {
+        return Attribute::make(set: fn ($value): array => ['description' => e($value)]);
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function ruleGroupId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

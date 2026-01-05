@@ -24,14 +24,16 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\PiggyBank;
 
+use FireflyIII\Support\Facades\Preferences;
 use Carbon\Carbon;
 use FireflyIII\Http\Controllers\Controller;
+use FireflyIII\Models\Account;
 use FireflyIII\Models\PiggyBank;
-use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 /**
@@ -39,7 +41,6 @@ use Illuminate\View\View;
  */
 class AmountController extends Controller
 {
-    private AccountRepositoryInterface   $accountRepos;
     private PiggyBankRepositoryInterface $piggyRepos;
 
     /**
@@ -51,11 +52,10 @@ class AmountController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.piggyBanks'));
+                app('view')->share('title', (string) trans('firefly.piggyBanks'));
                 app('view')->share('mainTitleIcon', 'fa-bullseye');
 
-                $this->piggyRepos   = app(PiggyBankRepositoryInterface::class);
-                $this->accountRepos = app(AccountRepositoryInterface::class);
+                $this->piggyRepos = app(PiggyBankRepositoryInterface::class);
 
                 return $next($request);
             }
@@ -67,18 +67,39 @@ class AmountController extends Controller
      *
      * @return Factory|View
      */
-    public function add(PiggyBank $piggyBank)
+    public function add(PiggyBank $piggyBank): Factory|\Illuminate\Contracts\View\View
     {
-        $leftOnAccount = $this->piggyRepos->leftOnAccount($piggyBank, today(config('app.timezone')));
-        $savedSoFar    = $this->piggyRepos->getCurrentAmount($piggyBank);
-        $maxAmount     = $leftOnAccount;
-        if (0 !== bccomp($piggyBank->targetamount, '0')) {
-            $leftToSave = bcsub($piggyBank->targetamount, $savedSoFar);
-            $maxAmount  = min($leftOnAccount, $leftToSave);
-        }
-        $currency      = $this->accountRepos->getAccountCurrency($piggyBank->account) ?? app('amount')->getDefaultCurrency();
+        /** @var Carbon $date */
+        $date       = session('end', today(config('app.timezone')));
+        $accounts   = [];
+        $total      = '0';
+        $totalSaved = $this->piggyRepos->getCurrentAmount($piggyBank);
+        foreach ($piggyBank->accounts as $account) {
+            $leftOnAccount = $this->piggyRepos->leftOnAccount($piggyBank, $account, $date);
+            $leftToSave    = bcsub($piggyBank->target_amount, $totalSaved);
+            $maxAmount     = 0 === bccomp($piggyBank->target_amount, '0') ? $leftOnAccount : min($leftOnAccount, $leftToSave);
 
-        return view('piggy-banks.add', compact('piggyBank', 'maxAmount', 'currency'));
+            Log::debug(sprintf(
+                'Account "%s", left on account "%s", saved so far "%s", left to save "%s", max amount "%s".',
+                $account->name,
+                $leftOnAccount,
+                $totalSaved,
+                $leftToSave,
+                $maxAmount,
+            ));
+
+            $accounts[]    = [
+                'account'         => $account,
+                'left_on_account' => $leftOnAccount,
+                'total_saved'     => $totalSaved,
+                'left_to_save'    => $leftToSave,
+                'max_amount'      => $maxAmount,
+            ];
+            $total         = bcadd($total, $leftOnAccount);
+        }
+        $total      = (float) $total; // intentional float.
+
+        return view('piggy-banks.add', ['piggyBank' => $piggyBank, 'accounts' => $accounts, 'total' => $total]);
     }
 
     /**
@@ -86,21 +107,28 @@ class AmountController extends Controller
      *
      * @return Factory|View
      */
-    public function addMobile(PiggyBank $piggyBank)
+    public function addMobile(PiggyBank $piggyBank): Factory|\Illuminate\Contracts\View\View
     {
         /** @var Carbon $date */
-        $date          = session('end', today(config('app.timezone')));
-        $leftOnAccount = $this->piggyRepos->leftOnAccount($piggyBank, $date);
-        $savedSoFar    = $this->piggyRepos->getCurrentAmount($piggyBank);
-        $maxAmount     = $leftOnAccount;
-
-        if (0 !== bccomp($piggyBank->targetamount, '0')) {
-            $leftToSave = bcsub($piggyBank->targetamount, $savedSoFar);
-            $maxAmount  = min($leftOnAccount, $leftToSave);
+        $date       = session('end', today(config('app.timezone')));
+        $accounts   = [];
+        $total      = '0';
+        $totalSaved = $this->piggyRepos->getCurrentAmount($piggyBank);
+        foreach ($piggyBank->accounts as $account) {
+            $leftOnAccount = $this->piggyRepos->leftOnAccount($piggyBank, $account, $date);
+            $leftToSave    = bcsub($piggyBank->target_amount, $totalSaved);
+            $maxAmount     = 0 === bccomp($piggyBank->target_amount, '0') ? $leftOnAccount : min($leftOnAccount, $leftToSave);
+            $accounts[]    = [
+                'account'         => $account,
+                'left_on_account' => $leftOnAccount,
+                'total_saved'     => $totalSaved,
+                'left_to_save'    => $leftToSave,
+                'max_amount'      => $maxAmount,
+            ];
+            $total         = bcadd($total, $leftOnAccount);
         }
-        $currency      = $this->accountRepos->getAccountCurrency($piggyBank->account) ?? app('amount')->getDefaultCurrency();
 
-        return view('piggy-banks.add-mobile', compact('piggyBank', 'maxAmount', 'currency'));
+        return view('piggy-banks.add-mobile', ['piggyBank' => $piggyBank, 'total' => $total, 'accounts' => $accounts]);
     }
 
     /**
@@ -108,32 +136,48 @@ class AmountController extends Controller
      */
     public function postAdd(Request $request, PiggyBank $piggyBank): RedirectResponse
     {
-        $amount   = $request->get('amount') ?? '0';
-        $currency = $this->accountRepos->getAccountCurrency($piggyBank->account) ?? app('amount')->getDefaultCurrency();
-        // if amount is negative, make positive and continue:
-        if (-1 === bccomp($amount, '0')) {
-            $amount = bcmul($amount, '-1');
+        $data    = $request->all();
+        $amounts = $data['amount'] ?? [];
+        $total   = '0';
+        Log::debug('Start with loop.');
+
+        /** @var Account $account */
+        foreach ($piggyBank->accounts as $account) {
+            $amount        = (string) ($amounts[$account->id] ?? '0');
+            if ('' === $amount || 0 === bccomp($amount, '0')) {
+                continue;
+            }
+            if (-1 === bccomp($amount, '0')) {
+                $amount = bcmul($amount, '-1');
+            }
+
+            // small check to see if the $amount is not more than the total "left to save" value
+            $currentAmount = $this->piggyRepos->getCurrentAmount($piggyBank);
+            $leftToSave    = 0 === bccomp($piggyBank->target_amount, '0') ? '0' : bcsub($piggyBank->target_amount, $currentAmount);
+            if (bccomp($amount, $leftToSave) > 0 && 0 !== bccomp($leftToSave, '0')) {
+                Log::debug(sprintf('Amount "%s" is more than left to save "%s". Using left to save.', $amount, $leftToSave));
+                $amount = $leftToSave;
+            }
+
+            $canAddAmount  = $this->piggyRepos->canAddAmount($piggyBank, $account, $amount);
+            if ($canAddAmount) {
+                $this->piggyRepos->addAmount($piggyBank, $account, $amount);
+                $total = bcadd($total, $amount);
+            }
+            $piggyBank->refresh();
         }
-        if ($this->piggyRepos->canAddAmount($piggyBank, $amount)) {
-            $this->piggyRepos->addAmount($piggyBank, $amount);
-            session()->flash(
-                'success',
-                (string)trans(
-                    'firefly.added_amount_to_piggy',
-                    ['amount' => app('amount')->formatAnything($currency, $amount, false), 'name' => $piggyBank->name]
-                )
-            );
-            app('preferences')->mark();
+        if (0 !== bccomp($total, '0')) {
+            session()->flash('success', (string) trans('firefly.added_amount_to_piggy', ['amount' => app('amount')->formatAnything($piggyBank->transactionCurrency, $total, false), 'name' => $piggyBank->name]));
+            Preferences::mark();
 
             return redirect(route('piggy-banks.index'));
         }
-
-        app('log')->error('Cannot add '.$amount.' because canAddAmount returned false.');
+        Log::error(sprintf('Cannot add %s because canAddAmount returned false.', $total));
         session()->flash(
             'error',
-            (string)trans(
+            (string) trans(
                 'firefly.cannot_add_amount_piggy',
-                ['amount' => app('amount')->formatAnything($currency, $amount, false), 'name' => e($piggyBank->name)]
+                ['amount' => app('amount')->formatAnything($piggyBank->transactionCurrency, $total, false), 'name' => e($piggyBank->name)]
             )
         );
 
@@ -145,32 +189,44 @@ class AmountController extends Controller
      */
     public function postRemove(Request $request, PiggyBank $piggyBank): RedirectResponse
     {
-        $amount   = $request->get('amount') ?? '0';
-        $currency = $this->accountRepos->getAccountCurrency($piggyBank->account) ?? app('amount')->getDefaultCurrency();
-        // if amount is negative, make positive and continue:
-        if (-1 === bccomp($amount, '0')) {
-            $amount = bcmul($amount, '-1');
+        $amounts = $request->get('amount') ?? [];
+        if (!is_array($amounts)) {
+            $amounts = [];
         }
-        if ($this->piggyRepos->canRemoveAmount($piggyBank, $amount)) {
-            $this->piggyRepos->removeAmount($piggyBank, $amount);
+        $total   = '0';
+
+        /** @var Account $account */
+        foreach ($piggyBank->accounts as $account) {
+            $amount = (string) ($amounts[$account->id] ?? '0');
+            if ('' === $amount || 0 === bccomp($amount, '0')) {
+                continue;
+            }
+            if (-1 === bccomp($amount, '0')) {
+                $amount = bcmul($amount, '-1');
+            }
+            if ($this->piggyRepos->canRemoveAmount($piggyBank, $account, $amount)) {
+                $this->piggyRepos->removeAmount($piggyBank, $account, $amount);
+                $total = bcadd($total, $amount);
+            }
+        }
+        if (0 !== bccomp($total, '0')) {
             session()->flash(
                 'success',
-                (string)trans(
+                (string) trans(
                     'firefly.removed_amount_from_piggy',
-                    ['amount' => app('amount')->formatAnything($currency, $amount, false), 'name' => $piggyBank->name]
+                    ['amount' => app('amount')->formatAnything($piggyBank->transactionCurrency, $total, false), 'name' => $piggyBank->name]
                 )
             );
-            app('preferences')->mark();
+            Preferences::mark();
 
             return redirect(route('piggy-banks.index'));
         }
-        $amount   = (string)$request->get('amount');
 
         session()->flash(
             'error',
-            (string)trans(
+            (string) trans(
                 'firefly.cannot_remove_from_piggy',
-                ['amount' => app('amount')->formatAnything($currency, $amount, false), 'name' => e($piggyBank->name)]
+                ['amount' => app('amount')->formatAnything($piggyBank->transactionCurrency, $total, false), 'name' => e($piggyBank->name)]
             )
         );
 
@@ -182,12 +238,17 @@ class AmountController extends Controller
      *
      * @return Factory|View
      */
-    public function remove(PiggyBank $piggyBank)
+    public function remove(PiggyBank $piggyBank): Factory|\Illuminate\Contracts\View\View
     {
-        $repetition = $this->piggyRepos->getRepetition($piggyBank);
-        $currency   = $this->accountRepos->getAccountCurrency($piggyBank->account) ?? app('amount')->getDefaultCurrency();
+        $accounts = [];
+        foreach ($piggyBank->accounts as $account) {
+            $accounts[] = [
+                'account'      => $account,
+                'saved_so_far' => $this->piggyRepos->getCurrentAmount($piggyBank, $account),
+            ];
+        }
 
-        return view('piggy-banks.remove', compact('piggyBank', 'repetition', 'currency'));
+        return view('piggy-banks.remove', ['piggyBank' => $piggyBank, 'accounts' => $accounts]);
     }
 
     /**
@@ -195,11 +256,16 @@ class AmountController extends Controller
      *
      * @return Factory|View
      */
-    public function removeMobile(PiggyBank $piggyBank)
+    public function removeMobile(PiggyBank $piggyBank): Factory|\Illuminate\Contracts\View\View
     {
-        $repetition = $this->piggyRepos->getRepetition($piggyBank);
-        $currency   = $this->accountRepos->getAccountCurrency($piggyBank->account) ?? app('amount')->getDefaultCurrency();
+        $accounts = [];
+        foreach ($piggyBank->accounts as $account) {
+            $accounts[] = [
+                'account'      => $account,
+                'saved_so_far' => $this->piggyRepos->getCurrentAmount($piggyBank, $account),
+            ];
+        }
 
-        return view('piggy-banks.remove-mobile', compact('piggyBank', 'repetition', 'currency'));
+        return view('piggy-banks.remove-mobile', ['piggyBank' => $piggyBank, 'accounts' => $accounts]);
     }
 }

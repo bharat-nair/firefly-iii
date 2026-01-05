@@ -1,4 +1,5 @@
 <?php
+
 /*
  * PurgeController.php
  * Copyright (c) 2022 james@firefly-iii.org
@@ -23,18 +24,20 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Data;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Bill;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\Category;
-use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\Recurrence;
 use FireflyIII\Models\Rule;
 use FireflyIII\Models\RuleGroup;
 use FireflyIII\Models\Tag;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
+use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
@@ -43,15 +46,27 @@ use Illuminate\Http\JsonResponse;
  */
 class PurgeController extends Controller
 {
+    protected array $acceptedRoles = [UserRoleEnum::FULL];
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->middleware(
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
+
+                return $next($request);
+            }
+        );
+    }
+
     /**
      * TODO cleanup and use repositories.
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/purgeData
      */
     public function purge(): JsonResponse
     {
         /** @var User $user */
-        $user = auth()->user();
+        $user       = auth()->user();
 
         // some manual code, too lazy to call all repositories.
 
@@ -62,14 +77,9 @@ class PurgeController extends Controller
         Bill::whereUserId($user->id)->onlyTrashed()->forceDelete();
 
         // piggies
-        $set  = PiggyBank::leftJoin('accounts', 'accounts.id', 'piggy_banks.account_id')
-            ->where('accounts.user_id', $user->id)->onlyTrashed()->get(['piggy_banks.*'])
-        ;
-
-        /** @var PiggyBank $piggy */
-        foreach ($set as $piggy) {
-            $piggy->forceDelete();
-        }
+        $repository = app(PiggyBankRepositoryInterface::class);
+        $repository->setUser($user);
+        $repository->purgeAll();
 
         // rule group
         RuleGroup::whereUserId($user->id)->onlyTrashed()->forceDelete();

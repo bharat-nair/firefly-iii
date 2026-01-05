@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ExpressionController.php
  * Copyright (c) 2024 Michael Thomas
@@ -36,7 +37,7 @@ class ExpressionController extends Controller
      * This endpoint is documented at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/rules/validateExpression
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function validateExpression(ValidateExpressionRequest $request): JsonResponse
     {

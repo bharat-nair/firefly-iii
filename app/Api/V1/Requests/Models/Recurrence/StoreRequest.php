@@ -1,4 +1,5 @@
 <?php
+
 /*
  * RecurrenceStoreRequest.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Recurrence;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Rules\BelongsUser;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsValidPositiveAmount;
@@ -34,7 +36,6 @@ use FireflyIII\Validation\RecurrenceValidation;
 use FireflyIII\Validation\TransactionValidation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class StoreRequest
@@ -75,7 +76,7 @@ class StoreRequest extends FormRequest
 
     /**
      * Returns the transaction data as it is found in the submitted data. It's a complex method according to code
-     * standards but it just has a lot of ??-statements because of the fields that may or may not exist.
+     * standards, but it just has a lot of ??-statements because of the fields that may or may not exist.
      */
     private function getTransactionData(): array
     {
@@ -120,10 +121,10 @@ class StoreRequest extends FormRequest
                 $current['moment'] = $repetition['moment'];
             }
             if (array_key_exists('skip', $repetition)) {
-                $current['skip'] = (int)$repetition['skip'];
+                $current['skip'] = (int) $repetition['skip'];
             }
             if (array_key_exists('weekend', $repetition)) {
-                $current['weekend'] = (int)$repetition['weekend'];
+                $current['weekend'] = (int) $repetition['weekend'];
             }
 
             $return[] = $current;
@@ -192,7 +193,7 @@ class StoreRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

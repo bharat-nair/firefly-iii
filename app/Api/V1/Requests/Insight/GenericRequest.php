@@ -25,8 +25,8 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Requests\Insight;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\AccountType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
@@ -70,7 +70,7 @@ class GenericRequest extends FormRequest
         /** @var Account $account */
         foreach ($this->accounts as $account) {
             $type = $account->accountType->type;
-            if (in_array($type, [AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE], true)) {
+            if (in_array($type, [AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value], true)) {
                 $return->push($account);
             }
         }
@@ -88,7 +88,7 @@ class GenericRequest extends FormRequest
         $array      = $this->get('accounts');
         if (is_array($array)) {
             foreach ($array as $accountId) {
-                $accountId = (int)$accountId;
+                $accountId = (int) $accountId;
                 $account   = $repository->find($accountId);
                 if (null !== $account) {
                     $this->accounts->push($account);
@@ -114,7 +114,7 @@ class GenericRequest extends FormRequest
         $array      = $this->get('bills');
         if (is_array($array)) {
             foreach ($array as $billId) {
-                $billId = (int)$billId;
+                $billId = (int) $billId;
                 $bill   = $repository->find($billId);
                 if (null !== $bill) {
                     $this->bills->push($bill);
@@ -140,7 +140,7 @@ class GenericRequest extends FormRequest
         $array      = $this->get('budgets');
         if (is_array($array)) {
             foreach ($array as $budgetId) {
-                $budgetId = (int)$budgetId;
+                $budgetId = (int) $budgetId;
                 $budget   = $repository->find($budgetId);
                 if (null !== $budget) {
                     $this->budgets->push($budget);
@@ -166,7 +166,7 @@ class GenericRequest extends FormRequest
         $array      = $this->get('categories');
         if (is_array($array)) {
             foreach ($array as $categoryId) {
-                $categoryId = (int)$categoryId;
+                $categoryId = (int) $categoryId;
                 $category   = $repository->find($categoryId);
                 if (null !== $category) {
                     $this->categories->push($category);
@@ -191,7 +191,7 @@ class GenericRequest extends FormRequest
         /** @var Account $account */
         foreach ($this->accounts as $account) {
             $type = $account->accountType->type;
-            if (AccountType::EXPENSE === $type) {
+            if (AccountTypeEnum::EXPENSE->value === $type) {
                 $return->push($account);
             }
         }
@@ -207,7 +207,7 @@ class GenericRequest extends FormRequest
         /** @var Account $account */
         foreach ($this->accounts as $account) {
             $type = $account->accountType->type;
-            if (AccountType::REVENUE === $type) {
+            if (AccountTypeEnum::REVENUE->value === $type) {
                 $return->push($account);
             }
         }
@@ -240,7 +240,7 @@ class GenericRequest extends FormRequest
         $array      = $this->get('tags');
         if (is_array($array)) {
             foreach ($array as $tagId) {
-                $tagId = (int)$tagId;
+                $tagId = (int) $tagId;
                 $tag   = $repository->find($tagId);
                 if (null !== $tag) {
                     $this->tags->push($tag);

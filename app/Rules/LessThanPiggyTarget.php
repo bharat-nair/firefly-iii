@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
@@ -36,13 +37,13 @@ class LessThanPiggyTarget implements ValidationRule
      */
     public function message(): string
     {
-        return (string)trans('validation.current_target_amount');
+        return (string) trans('validation.current_target_amount');
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         // TODO not sure if this is still used.
     }

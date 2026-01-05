@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Handlers\Events;
 
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Enums\WebhookTrigger;
 use FireflyIII\Events\RequestedSendWebhookMessages;
 use FireflyIII\Events\UpdatedTransactionGroup;
@@ -30,81 +31,68 @@ use FireflyIII\Generator\Webhook\MessageGeneratorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
+use FireflyIII\Repositories\PeriodStatistic\PeriodStatisticRepositoryInterface;
 use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
 use FireflyIII\Services\Internal\Support\CreditRecalculateService;
+use FireflyIII\Support\Models\AccountBalanceCalculator;
 use FireflyIII\TransactionRules\Engine\RuleEngineInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class UpdatedGroupEventHandler
  */
 class UpdatedGroupEventHandler
 {
-    /**
-     * This method will check all the rules when a journal is updated.
-     */
-    public function processRules(UpdatedTransactionGroup $updatedGroupEvent): void
+    public function runAllHandlers(UpdatedTransactionGroup $event): void
     {
-        if (false === $updatedGroupEvent->applyRules) {
-            app('log')->info(sprintf('Will not run rules on group #%d', $updatedGroupEvent->transactionGroup->id));
-
-            return;
+        $this->unifyAccounts($event);
+        $this->processRules($event);
+        $this->recalculateCredit($event);
+        $this->triggerWebhooks($event);
+        $this->removePeriodStatistics($event);
+        if ($event->runRecalculations) {
+            $this->updateRunningBalance($event);
         }
 
-        $journals            = $updatedGroupEvent->transactionGroup->transactionJournals;
-        $array               = [];
+
+    }
+
+    /**
+     * TODO duplicate
+     */
+    private function removePeriodStatistics(UpdatedTransactionGroup $event): void
+    {
+        /** @var PeriodStatisticRepositoryInterface $repository */
+        $repository = app(PeriodStatisticRepositoryInterface::class);
 
         /** @var TransactionJournal $journal */
-        foreach ($journals as $journal) {
-            $array[] = $journal->id;
+        foreach ($event->transactionGroup->transactionJournals as $journal) {
+            $source     = $journal->transactions()->where('amount', '<', '0')->first();
+            $dest       = $journal->transactions()->where('amount', '>', '0')->first();
+            $repository->deleteStatisticsForModel($source->account, $journal->date);
+            $repository->deleteStatisticsForModel($dest->account, $journal->date);
+
+            $categories = $journal->categories;
+            $tags       = $journal->tags;
+            $budgets    = $journal->budgets;
+
+            foreach ($categories as $category) {
+                $repository->deleteStatisticsForModel($category, $journal->date);
+            }
+            foreach ($tags as $tag) {
+                $repository->deleteStatisticsForModel($tag, $journal->date);
+            }
+            foreach ($budgets as $budget) {
+                $repository->deleteStatisticsForModel($budget, $journal->date);
+            }
+            if (0 === $categories->count()) {
+                $repository->deleteStatisticsForPrefix($journal->userGroup, 'no_category', $journal->date);
+            }
+            if (0 === $budgets->count()) {
+                $repository->deleteStatisticsForPrefix($journal->userGroup, 'no_budget', $journal->date);
+            }
         }
-        $journalIds          = implode(',', $array);
-        app('log')->debug(sprintf('Add local operator for journal(s): %s', $journalIds));
-
-        // collect rules:
-        $ruleGroupRepository = app(RuleGroupRepositoryInterface::class);
-        $ruleGroupRepository->setUser($updatedGroupEvent->transactionGroup->user);
-
-        $groups              = $ruleGroupRepository->getRuleGroupsWithRules('update-journal');
-
-        // file rule engine.
-        $newRuleEngine       = app(RuleEngineInterface::class);
-        $newRuleEngine->setUser($updatedGroupEvent->transactionGroup->user);
-        $newRuleEngine->addOperator(['type' => 'journal_id', 'value' => $journalIds]);
-        $newRuleEngine->setRuleGroups($groups);
-        $newRuleEngine->fire();
-    }
-
-    public function recalculateCredit(UpdatedTransactionGroup $event): void
-    {
-        $group  = $event->transactionGroup;
-
-        /** @var CreditRecalculateService $object */
-        $object = app(CreditRecalculateService::class);
-        $object->setGroup($group);
-        $object->recalculate();
-    }
-
-    public function triggerWebhooks(UpdatedTransactionGroup $updatedGroupEvent): void
-    {
-        app('log')->debug(__METHOD__);
-        $group  = $updatedGroupEvent->transactionGroup;
-        if (false === $updatedGroupEvent->fireWebhooks) {
-            app('log')->info(sprintf('Will not fire webhooks for transaction group #%d', $group->id));
-
-            return;
-        }
-        $user   = $group->user;
-
-        /** @var MessageGeneratorInterface $engine */
-        $engine = app(MessageGeneratorInterface::class);
-        $engine->setUser($user);
-        $engine->setObjects(new Collection([$group]));
-        $engine->setTrigger(WebhookTrigger::UPDATE_TRANSACTION->value);
-        $engine->generateMessages();
-
-        event(new RequestedSendWebhookMessages());
     }
 
     /**
@@ -128,7 +116,7 @@ class UpdatedGroupEventHandler
         ;
 
         if (null === $first) {
-            app('log')->warning(sprintf('Group #%d has no transaction journals.', $group->id));
+            Log::warning(sprintf('Group #%d has no transaction journals.', $group->id));
 
             return;
         }
@@ -142,17 +130,93 @@ class UpdatedGroupEventHandler
         $destAccount   = $first->transactions()->where('amount', '>', '0')->first()->account;
 
         $type          = $first->transactionType->type;
-        if (TransactionType::TRANSFER === $type || TransactionType::WITHDRAWAL === $type) {
+        if (TransactionTypeEnum::TRANSFER->value === $type || TransactionTypeEnum::WITHDRAWAL->value === $type) {
             // set all source transactions to source account:
             Transaction::whereIn('transaction_journal_id', $all)
                 ->where('amount', '<', 0)->update(['account_id' => $sourceAccount->id])
             ;
         }
-        if (TransactionType::TRANSFER === $type || TransactionType::DEPOSIT === $type) {
+        if (TransactionTypeEnum::TRANSFER->value === $type || TransactionTypeEnum::DEPOSIT->value === $type) {
             // set all destination transactions to destination account:
             Transaction::whereIn('transaction_journal_id', $all)
                 ->where('amount', '>', 0)->update(['account_id' => $destAccount->id])
             ;
+        }
+    }
+
+    /**
+     * This method will check all the rules when a journal is updated.
+     */
+    private function processRules(UpdatedTransactionGroup $updatedGroupEvent): void
+    {
+        if (false === $updatedGroupEvent->applyRules) {
+            Log::info(sprintf('Will not run rules on group #%d', $updatedGroupEvent->transactionGroup->id));
+
+            return;
+        }
+
+        $journals            = $updatedGroupEvent->transactionGroup->transactionJournals;
+        $array               = [];
+
+        /** @var TransactionJournal $journal */
+        foreach ($journals as $journal) {
+            $array[] = $journal->id;
+        }
+        $journalIds          = implode(',', $array);
+        Log::debug(sprintf('Add local operator for journal(s): %s', $journalIds));
+
+        // collect rules:
+        $ruleGroupRepository = app(RuleGroupRepositoryInterface::class);
+        $ruleGroupRepository->setUser($updatedGroupEvent->transactionGroup->user);
+
+        $groups              = $ruleGroupRepository->getRuleGroupsWithRules('update-journal');
+
+        // file rule engine.
+        $newRuleEngine       = app(RuleEngineInterface::class);
+        $newRuleEngine->setUser($updatedGroupEvent->transactionGroup->user);
+        $newRuleEngine->addOperator(['type' => 'journal_id', 'value' => $journalIds]);
+        $newRuleEngine->setRuleGroups($groups);
+        $newRuleEngine->fire();
+    }
+
+    private function recalculateCredit(UpdatedTransactionGroup $event): void
+    {
+        $group  = $event->transactionGroup;
+
+        /** @var CreditRecalculateService $object */
+        $object = app(CreditRecalculateService::class);
+        $object->setGroup($group);
+        $object->recalculate();
+    }
+
+    private function triggerWebhooks(UpdatedTransactionGroup $updatedGroupEvent): void
+    {
+        Log::debug(__METHOD__);
+        $group  = $updatedGroupEvent->transactionGroup;
+        if (false === $updatedGroupEvent->fireWebhooks) {
+            Log::info(sprintf('Will not fire webhooks for transaction group #%d', $group->id));
+
+            return;
+        }
+        $user   = $group->user;
+
+        /** @var MessageGeneratorInterface $engine */
+        $engine = app(MessageGeneratorInterface::class);
+        $engine->setUser($user);
+        $engine->setObjects(new Collection()->push($group));
+        $engine->setTrigger(WebhookTrigger::UPDATE_TRANSACTION);
+        $engine->generateMessages();
+
+        Log::debug(sprintf('send event RequestedSendWebhookMessages from %s', __METHOD__));
+        event(new RequestedSendWebhookMessages());
+    }
+
+    private function updateRunningBalance(UpdatedTransactionGroup $event): void
+    {
+        Log::debug(__METHOD__);
+        $group = $event->transactionGroup;
+        foreach ($group->transactionJournals as $journal) {
+            AccountBalanceCalculator::recalculateForJournal($journal);
         }
     }
 }

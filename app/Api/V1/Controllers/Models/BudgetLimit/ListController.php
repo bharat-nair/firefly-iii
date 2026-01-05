@@ -1,4 +1,5 @@
 <?php
+
 /*
  * ListController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -24,11 +25,11 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\BudgetLimit;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Support\Http\Api\TransactionFilter;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
@@ -47,8 +48,6 @@ class ListController extends Controller
      * This endpoint is documented at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/budgets/listTransactionByBudgetLimit
      * Show all transactions.
-     *
-     * @throws FireflyException
      */
     public function transactions(Request $request, Budget $budget, BudgetLimit $budgetLimit): JsonResponse
     {
@@ -83,7 +82,11 @@ class ListController extends Controller
         $collector->setTypes($types);
         $paginator    = $collector->getPaginatedGroups();
         $paginator->setPath(route('api.v1.budgets.limits.transactions', [$budget->id, $budgetLimit->id]).$this->buildParams());
-        $transactions = $paginator->getCollection();
+
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($admin);
+        $transactions = $enrichment->enrich($paginator->getCollection());
 
         /** @var TransactionGroupTransformer $transformer */
         $transformer  = app(TransactionGroupTransformer::class);

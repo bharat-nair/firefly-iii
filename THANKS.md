@@ -3,7 +3,21 @@
 Over time, many people have contributed to Firefly III. Their efforts are not always visible, but always remembered and appreciated.
 Please find below all the people who contributed to the Firefly III code. Their names are mentioned in the year of their first contribution.
 
+## 2025
+- Jihad
+- jreyesr
+- codearena-bot
+- Nicky De Maeyer
+- Denis Iskandarov
+- Lompi
+- Jose Diaz-Gonzalez
+- SoftBrix
+
 ## 2024
+- Sobuno
+- TasneemTantawy
+- Antônio Franco
+- yparitcher
 - Jhon Pedroza
 - mzhubail
 - tasnim

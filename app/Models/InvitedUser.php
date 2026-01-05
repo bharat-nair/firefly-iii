@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Casts\SeparateTimezoneCaster;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
@@ -31,20 +32,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperInvitedUser
- */
 class InvitedUser extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
 
-    protected $casts
-                        = [
-            'expires'  => 'datetime',
-            'redeemed' => 'boolean',
-        ];
-    protected $fillable = ['user_id', 'email', 'invite_code', 'expires', 'redeemed'];
+    protected $fillable = ['user_group_id', 'user_id', 'email', 'invite_code', 'expires', 'expires_tz', 'redeemed'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -67,5 +60,15 @@ class InvitedUser extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'expires'       => SeparateTimezoneCaster::class,
+            'redeemed'      => 'boolean',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
     }
 }

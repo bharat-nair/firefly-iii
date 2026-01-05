@@ -23,35 +23,26 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Carbon\Carbon;
+use FireflyIII\Handlers\Observer\AvailableBudgetObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperAvailableBudget
- */
+#[ObservedBy([AvailableBudgetObserver::class])]
 class AvailableBudget extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at'              => 'datetime',
-            'updated_at'              => 'datetime',
-            'deleted_at'              => 'datetime',
-            'start_date'              => 'date',
-            'end_date'                => 'date',
-            'transaction_currency_id' => 'int',
-        ];
-
-    protected $fillable = ['user_id', 'user_group_id', 'transaction_currency_id', 'amount', 'start_date', 'end_date'];
+    protected $fillable = ['user_id', 'user_group_id', 'transaction_currency_id', 'amount', 'start_date', 'end_date', 'start_date_tz', 'end_date_tz', 'native_amount'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -89,14 +80,46 @@ class AvailableBudget extends Model
     protected function amount(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
+        );
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'              => 'datetime',
+            'updated_at'              => 'datetime',
+            'deleted_at'              => 'datetime',
+            'start_date'              => 'date',
+            'end_date'                => 'date',
+            'transaction_currency_id' => 'int',
+            'amount'                  => 'string',
+            'native_amount'           => 'string',
+            'user_id'                 => 'integer',
+            'user_group_id'           => 'integer',
+        ];
+    }
+
+    protected function endDate(): Attribute
+    {
+        return Attribute::make(
+            get: fn (string $value): Carbon => Carbon::parse($value),
+            set: fn (Carbon $value): string => $value->format('Y-m-d'),
+        );
+    }
+
+    protected function startDate(): Attribute
+    {
+        return Attribute::make(
+            get: fn (string $value): Carbon => Carbon::parse($value),
+            set: fn (Carbon $value): string => $value->format('Y-m-d'),
         );
     }
 
     protected function transactionCurrencyId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

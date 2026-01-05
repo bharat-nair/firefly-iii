@@ -1,4 +1,5 @@
 <?php
+
 /**
  * TagController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
@@ -32,6 +34,7 @@ use FireflyIII\Repositories\Tag\OperationsRepositoryInterface;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Class TagController
@@ -58,9 +61,9 @@ class TagController extends Controller
     /**
      * @return Factory|View
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    public function accountPerTag(Collection $accounts, Collection $tags, Carbon $start, Carbon $end)
+    public function accountPerTag(Collection $accounts, Collection $tags, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $spent  = $this->opsRepository->listExpenses($start, $end, $accounts, $tags);
         $earned = $this->opsRepository->listIncome($start, $end, $accounts, $tags);
@@ -102,11 +105,11 @@ class TagController extends Controller
                                                                                                   ];
                     $report[$sourceAccountId]['currencies'][$currencyId]['tags'][$tagId]['spent'] = bcadd(
                         $report[$sourceAccountId]['currencies'][$currencyId]['tags'][$tagId]['spent'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
                     $report[$sourceAccountId]['currencies'][$currencyId]['tags'][$tagId]['sum']   = bcadd(
                         $report[$sourceAccountId]['currencies'][$currencyId]['tags'][$tagId]['sum'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
                 }
             }
@@ -136,25 +139,25 @@ class TagController extends Controller
                                                                                                  ];
                     $report[$destinationId]['currencies'][$currencyId]['tags'][$tagId]['earned'] = bcadd(
                         $report[$destinationId]['currencies'][$currencyId]['tags'][$tagId]['earned'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
                     $report[$destinationId]['currencies'][$currencyId]['tags'][$tagId]['sum']    = bcadd(
                         $report[$destinationId]['currencies'][$currencyId]['tags'][$tagId]['sum'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
                 }
             }
         }
 
-        return view('reports.tag.partials.account-per-tag', compact('report', 'tags'));
+        return view('reports.tag.partials.account-per-tag', ['report' => $report, 'tags' => $tags]);
     }
 
     /**
      * @return Factory|View
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    public function accounts(Collection $accounts, Collection $tags, Carbon $start, Carbon $end)
+    public function accounts(Collection $accounts, Collection $tags, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $spent  = $this->opsRepository->listExpenses($start, $end, $accounts, $tags);
         $earned = $this->opsRepository->listIncome($start, $end, $accounts, $tags);
@@ -198,14 +201,14 @@ class TagController extends Controller
                     ];
                     $report[$sourceAccountId]['currencies'][$currencyId]['spent'] = bcadd(
                         $report[$sourceAccountId]['currencies'][$currencyId]['spent'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
                     $report[$sourceAccountId]['currencies'][$currencyId]['sum']   = bcadd(
                         $report[$sourceAccountId]['currencies'][$currencyId]['sum'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
-                    $sums[$currencyId]['spent_sum']                               = bcadd($sums[$currencyId]['spent_sum'], $journal['amount']);
-                    $sums[$currencyId]['total_sum']                               = bcadd($sums[$currencyId]['total_sum'], $journal['amount']);
+                    $sums[$currencyId]['spent_sum']                               = bcadd($sums[$currencyId]['spent_sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['total_sum']                               = bcadd($sums[$currencyId]['total_sum'], (string) $journal['amount']);
                 }
             }
         }
@@ -236,19 +239,19 @@ class TagController extends Controller
                     ];
                     $report[$destinationAccountId]['currencies'][$currencyId]['earned'] = bcadd(
                         $report[$destinationAccountId]['currencies'][$currencyId]['earned'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
                     $report[$destinationAccountId]['currencies'][$currencyId]['sum']    = bcadd(
                         $report[$destinationAccountId]['currencies'][$currencyId]['sum'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
-                    $sums[$currencyId]['earned_sum']                                    = bcadd($sums[$currencyId]['earned_sum'], $journal['amount']);
-                    $sums[$currencyId]['total_sum']                                     = bcadd($sums[$currencyId]['total_sum'], $journal['amount']);
+                    $sums[$currencyId]['earned_sum']                                    = bcadd($sums[$currencyId]['earned_sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['total_sum']                                     = bcadd($sums[$currencyId]['total_sum'], (string) $journal['amount']);
                 }
             }
         }
 
-        return view('reports.tag.partials.accounts', compact('sums', 'report'));
+        return view('reports.tag.partials.accounts', ['sums' => $sums, 'report' => $report]);
     }
 
     /**
@@ -278,9 +281,9 @@ class TagController extends Controller
                         'currency_decimal_places'  => $currency['currency_decimal_places'],
                     ];
                     ++$result[$key]['transactions'];
-                    $result[$key]['sum']       = bcadd($journal['amount'], $result[$key]['sum']);
-                    $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string)$result[$key]['transactions']);
-                    $result[$key]['avg_float'] = (float)$result[$key]['avg'];
+                    $result[$key]['sum']       = bcadd((string) $journal['amount'], $result[$key]['sum']);
+                    $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string) $result[$key]['transactions']);
+                    $result[$key]['avg_float'] = (float) $result[$key]['avg'];
                 }
             }
         }
@@ -290,9 +293,9 @@ class TagController extends Controller
         array_multisort($amounts, SORT_ASC, $result);
 
         try {
-            $result = view('reports.tag.partials.avg-expenses', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.tag.partials.avg-expenses', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);
@@ -328,9 +331,9 @@ class TagController extends Controller
                         'currency_decimal_places' => $currency['currency_decimal_places'],
                     ];
                     ++$result[$key]['transactions'];
-                    $result[$key]['sum']       = bcadd($journal['amount'], $result[$key]['sum']);
-                    $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string)$result[$key]['transactions']);
-                    $result[$key]['avg_float'] = (float)$result[$key]['avg'];
+                    $result[$key]['sum']       = bcadd((string) $journal['amount'], $result[$key]['sum']);
+                    $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string) $result[$key]['transactions']);
+                    $result[$key]['avg_float'] = (float) $result[$key]['avg'];
                 }
             }
         }
@@ -340,9 +343,9 @@ class TagController extends Controller
         array_multisort($amounts, SORT_DESC, $result);
 
         try {
-            $result = view('reports.tag.partials.avg-income', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.tag.partials.avg-income', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);
@@ -354,9 +357,9 @@ class TagController extends Controller
     /**
      * @return Factory|View
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
-    public function tags(Collection $accounts, Collection $tags, Carbon $start, Carbon $end)
+    public function tags(Collection $accounts, Collection $tags, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $spent  = $this->opsRepository->listExpenses($start, $end, $accounts, $tags);
         $earned = $this->opsRepository->listIncome($start, $end, $accounts, $tags);
@@ -402,10 +405,10 @@ class TagController extends Controller
                         'currency_name'           => $currency['currency_name'],
                         'currency_decimal_places' => $currency['currency_decimal_places'],
                     ];
-                    $report[$tagId]['currencies'][$currencyId]['spent'] = bcadd($report[$tagId]['currencies'][$currencyId]['spent'], $journal['amount']);
-                    $report[$tagId]['currencies'][$currencyId]['sum']   = bcadd($report[$tagId]['currencies'][$currencyId]['sum'], $journal['amount']);
-                    $sums[$currencyId]['spent_sum']                     = bcadd($sums[$currencyId]['spent_sum'], $journal['amount']);
-                    $sums[$currencyId]['total_sum']                     = bcadd($sums[$currencyId]['total_sum'], $journal['amount']);
+                    $report[$tagId]['currencies'][$currencyId]['spent'] = bcadd((string) $report[$tagId]['currencies'][$currencyId]['spent'], (string) $journal['amount']);
+                    $report[$tagId]['currencies'][$currencyId]['sum']   = bcadd((string) $report[$tagId]['currencies'][$currencyId]['sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['spent_sum']                     = bcadd($sums[$currencyId]['spent_sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['total_sum']                     = bcadd($sums[$currencyId]['total_sum'], (string) $journal['amount']);
                 }
             }
         }
@@ -440,15 +443,15 @@ class TagController extends Controller
                         'currency_name'           => $currency['currency_name'],
                         'currency_decimal_places' => $currency['currency_decimal_places'],
                     ];
-                    $report[$tagId]['currencies'][$currencyId]['earned'] = bcadd($report[$tagId]['currencies'][$currencyId]['earned'], $journal['amount']);
-                    $report[$tagId]['currencies'][$currencyId]['sum']    = bcadd($report[$tagId]['currencies'][$currencyId]['sum'], $journal['amount']);
-                    $sums[$currencyId]['earned_sum']                     = bcadd($sums[$currencyId]['earned_sum'], $journal['amount']);
-                    $sums[$currencyId]['total_sum']                      = bcadd($sums[$currencyId]['total_sum'], $journal['amount']);
+                    $report[$tagId]['currencies'][$currencyId]['earned'] = bcadd((string) $report[$tagId]['currencies'][$currencyId]['earned'], (string) $journal['amount']);
+                    $report[$tagId]['currencies'][$currencyId]['sum']    = bcadd((string) $report[$tagId]['currencies'][$currencyId]['sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['earned_sum']                     = bcadd($sums[$currencyId]['earned_sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['total_sum']                      = bcadd($sums[$currencyId]['total_sum'], (string) $journal['amount']);
                 }
             }
         }
 
-        return view('reports.tag.partials.tags', compact('sums', 'report'));
+        return view('reports.tag.partials.tags', ['sums' => $sums, 'report' => $report]);
     }
 
     /**
@@ -466,7 +469,7 @@ class TagController extends Controller
                     $result[] = [
                         'description'              => $journal['description'],
                         'transaction_group_id'     => $journal['transaction_group_id'],
-                        'amount_float'             => (float)$journal['amount'],
+                        'amount_float'             => (float) $journal['amount'],
                         'amount'                   => $journal['amount'],
                         'date'                     => $journal['date']->isoFormat($this->monthAndDayFormat),
                         'date_sort'                => $journal['date']->format('Y-m-d'),
@@ -488,9 +491,9 @@ class TagController extends Controller
         array_multisort($amounts, SORT_ASC, $result);
 
         try {
-            $result = view('reports.tag.partials.top-expenses', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.tag.partials.top-expenses', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);
@@ -514,7 +517,7 @@ class TagController extends Controller
                     $result[] = [
                         'description'             => $journal['description'],
                         'transaction_group_id'    => $journal['transaction_group_id'],
-                        'amount_float'            => (float)$journal['amount'], // intentional float.
+                        'amount_float'            => (float) $journal['amount'], // intentional float.
                         'amount'                  => $journal['amount'],
                         'date'                    => $journal['date']->isoFormat($this->monthAndDayFormat),
                         'date_sort'               => $journal['date']->format('Y-m-d'),
@@ -536,9 +539,9 @@ class TagController extends Controller
         array_multisort($amounts, SORT_DESC, $result);
 
         try {
-            $result = view('reports.tag.partials.top-income', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.tag.partials.top-income', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::debug(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);

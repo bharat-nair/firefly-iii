@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Casts\SeparateTimezoneCaster;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
@@ -31,25 +32,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @mixin IdeHelperCurrencyExchangeRate
- */
 class CurrencyExchangeRate extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at'       => 'datetime',
-            'updated_at'       => 'datetime',
-            'user_id'          => 'int',
-            'from_currency_id' => 'int',
-            'to_currency_id'   => 'int',
-            'date'             => 'datetime',
-        ];
-    protected $fillable = ['user_id', 'from_currency_id', 'to_currency_id', 'date', 'rate'];
+    protected $fillable = ['user_id', 'user_group_id', 'from_currency_id', 'to_currency_id', 'date', 'date_tz', 'rate'];
 
     public function fromCurrency(): BelongsTo
     {
@@ -66,31 +55,46 @@ class CurrencyExchangeRate extends Model
         return $this->belongsTo(User::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'       => 'datetime',
+            'updated_at'       => 'datetime',
+            'user_id'          => 'integer',
+            'user_group_id'    => 'integer',
+            'from_currency_id' => 'integer',
+            'to_currency_id'   => 'integer',
+            'date'             => SeparateTimezoneCaster::class,
+            'rate'             => 'string',
+            'user_rate'        => 'string',
+        ];
+    }
+
     protected function fromCurrencyId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function rate(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
         );
     }
 
     protected function toCurrencyId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function userRate(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
         );
     }
 }

@@ -37,19 +37,10 @@ class BillWarningMail extends Mailable
     use Queueable;
     use SerializesModels;
 
-    public Bill   $bill;
-    public int    $diff;
-    public string $field;
-
     /**
      * ConfirmEmailChangeMail constructor.
      */
-    public function __construct(Bill $bill, string $field, int $diff)
-    {
-        $this->bill  = $bill;
-        $this->field = $field;
-        $this->diff  = $diff;
-    }
+    public function __construct(public Bill $bill, public string $field, public int $diff) {}
 
     /**
      * Build the message.
@@ -58,9 +49,9 @@ class BillWarningMail extends Mailable
      */
     public function build(): self
     {
-        $subject = (string)trans(sprintf('email.bill_warning_subject_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
+        $subject = (string) trans(sprintf('email.bill_warning_subject_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
         if (0 === $this->diff) {
-            $subject = (string)trans(sprintf('email.bill_warning_subject_now_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
+            $subject = (string) trans(sprintf('email.bill_warning_subject_now_%s', $this->field), ['diff' => $this->diff, 'name' => $this->bill->name]);
         }
 
         return $this

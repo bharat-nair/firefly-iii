@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\Rule\RuleRepositoryInterface;
 use FireflyIII\Support\Search\SearchInterface;
@@ -30,6 +31,7 @@ use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Class SearchController.
@@ -46,7 +48,7 @@ class SearchController extends Controller
         $this->middleware(
             static function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-search');
-                app('view')->share('title', (string)trans('firefly.search'));
+                app('view')->share('title', (string) trans('firefly.search'));
 
                 return $next($request);
             }
@@ -58,16 +60,16 @@ class SearchController extends Controller
      *
      * @return Factory|View
      */
-    public function index(Request $request, SearchInterface $searcher)
+    public function index(Request $request, SearchInterface $searcher): Factory|\Illuminate\Contracts\View\View
     {
         // search params:
         $fullQuery        = $request->get('search');
         if (is_array($request->get('search'))) {
             $fullQuery = '';
         }
-        $fullQuery        = (string)$fullQuery;
-        $page             = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
-        $ruleId           = (int)$request->get('rule');
+        $fullQuery        = (string) $fullQuery;
+        $page             = 0 === (int) $request->get('page') ? 1 : (int) $request->get('page');
+        $ruleId           = (int) $request->get('rule');
         $ruleChanged      = false;
 
         // find rule, check if query is different, offer to update.
@@ -83,12 +85,13 @@ class SearchController extends Controller
         $searcher->parseQuery($fullQuery);
 
         // words from query and operators:
-        $query            = $searcher->getWordsAsString();
+        $words            = $searcher->getWords();
+        $excludedWords    = $searcher->getExcludedWords();
         $operators        = $searcher->getOperators();
         $invalidOperators = $searcher->getInvalidOperators();
-        $subTitle         = (string)trans('breadcrumbs.search_result', ['query' => $fullQuery]);
+        $subTitle         = (string) trans('breadcrumbs.search_result', ['query' => $fullQuery]);
 
-        return view('search.index', compact('query', 'operators', 'page', 'rule', 'fullQuery', 'subTitle', 'ruleId', 'ruleChanged', 'invalidOperators'));
+        return view('search.index', ['words' => $words, 'excludedWords' => $excludedWords, 'operators' => $operators, 'page' => $page, 'rule' => $rule, 'fullQuery' => $fullQuery, 'subTitle' => $subTitle, 'ruleId' => $ruleId, 'ruleChanged' => $ruleChanged, 'invalidOperators' => $invalidOperators]);
     }
 
     /**
@@ -102,8 +105,8 @@ class SearchController extends Controller
         if (!is_scalar($entry)) {
             $entry = '';
         }
-        $fullQuery  = (string)$entry;
-        $page       = 0 === (int)$request->get('page') ? 1 : (int)$request->get('page');
+        $fullQuery  = (string) $entry;
+        $page       = 0 === (int) $request->get('page') ? 1 : (int) $request->get('page');
 
         $searcher->parseQuery($fullQuery);
 
@@ -116,10 +119,10 @@ class SearchController extends Controller
         $groups->setPath($url);
 
         try {
-            $html = view('search.search', compact('groups', 'hasPages', 'searchTime'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Cannot render search.search: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $html = view('search.search', ['groups' => $groups, 'hasPages' => $hasPages, 'searchTime' => $searchTime])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Cannot render search.search: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $html = 'Could not render view.';
 
             throw new FireflyException($html, 0, $e);

@@ -25,6 +25,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Class ChangesForV475.
@@ -48,8 +49,8 @@ class ChangesForV475 extends Migration
     /**
      * Run the migrations.
      *
-     * @SuppressWarnings(PHPMD.ShortMethodName)
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ShortMethodName")
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function up(): void
     {

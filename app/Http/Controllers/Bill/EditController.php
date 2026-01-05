@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Bill;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\BillUpdateRequest;
@@ -52,7 +53,7 @@ class EditController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.bills'));
+                app('view')->share('title', (string) trans('firefly.bills'));
                 app('view')->share('mainTitleIcon', 'fa-calendar-o');
                 $this->attachments = app(AttachmentHelperInterface::class);
                 $this->repository  = app(BillRepositoryInterface::class);
@@ -64,10 +65,8 @@ class EditController extends Controller
 
     /**
      * Edit a bill.
-     *
-     * @return Factory|View
      */
-    public function edit(Request $request, Bill $bill)
+    public function edit(Request $request, Bill $bill): Factory|View
     {
         $periods          = [];
 
@@ -75,21 +74,19 @@ class EditController extends Controller
         $billPeriods      = config('firefly.bill_periods');
 
         foreach ($billPeriods as $current) {
-            $periods[$current] = (string)trans('firefly.'.$current);
+            $periods[$current] = (string) trans('firefly.'.$current);
         }
 
-        $subTitle         = (string)trans('firefly.edit_bill', ['name' => $bill->name]);
+        $subTitle         = (string) trans('firefly.edit_bill', ['name' => $bill->name]);
 
         // put previous url in session if not redirect from store (not "return_to_edit").
         if (true !== session('bills.edit.fromUpdate')) {
             $this->rememberPreviousUrl('bills.edit.url');
         }
 
-        $currency         = app('amount')->getDefaultCurrency();
-        $bill->amount_min = app('steam')->bcround($bill->amount_min, $currency->decimal_places);
-        $bill->amount_max = app('steam')->bcround($bill->amount_max, $currency->decimal_places);
+        $bill->amount_min = app('steam')->bcround($bill->amount_min, $bill->transactionCurrency->decimal_places);
+        $bill->amount_max = app('steam')->bcround($bill->amount_max, $bill->transactionCurrency->decimal_places);
         $rules            = $this->repository->getRulesForBill($bill);
-        $defaultCurrency  = app('amount')->getDefaultCurrency();
 
         // code to handle active-checkboxes
         $hasOldInput      = null !== $request->old('_token');
@@ -99,14 +96,14 @@ class EditController extends Controller
             'extension_date'          => $bill->extension_date,
             'notes'                   => $this->repository->getNoteText($bill),
             'transaction_currency_id' => $bill->transaction_currency_id,
-            'active'                  => $hasOldInput ? (bool)$request->old('active') : $bill->active,
+            'active'                  => $hasOldInput ? (bool) $request->old('active') : $bill->active,
             'object_group'            => null !== $bill->objectGroups->first() ? $bill->objectGroups->first()->title : '',
         ];
 
         $request->session()->flash('preFilled', $preFilled);
         $request->session()->forget('bills.edit.fromUpdate');
 
-        return view('bills.edit', compact('subTitle', 'periods', 'rules', 'bill', 'defaultCurrency', 'preFilled'));
+        return view('bills.edit', ['subTitle' => $subTitle, 'periods' => $periods, 'rules' => $rules, 'bill' => $bill, 'preFilled' => $preFilled]);
     }
 
     /**
@@ -119,8 +116,8 @@ class EditController extends Controller
 
         Log::channel('audit')->info(sprintf('Updated bill #%d.', $bill->id), $billData);
 
-        $request->session()->flash('success', (string)trans('firefly.updated_bill', ['name' => $bill->name]));
-        app('preferences')->mark();
+        $request->session()->flash('success', (string) trans('firefly.updated_bill', ['name' => $bill->name]));
+        Preferences::mark();
 
         /** @var null|array $files */
         $files    = $request->hasFile('attachments') ? $request->file('attachments') : null;
@@ -129,7 +126,7 @@ class EditController extends Controller
         }
         if (null !== $files && auth()->user()->hasRole('demo')) {
             Log::channel('audit')->warning(sprintf('The demo user is trying to upload attachments in %s.', __METHOD__));
-            session()->flash('info', (string)trans('firefly.no_att_demo_user'));
+            session()->flash('info', (string) trans('firefly.no_att_demo_user'));
         }
 
         // flash messages
@@ -138,7 +135,7 @@ class EditController extends Controller
         }
         $redirect = redirect($this->getPreviousUrl('bills.edit.url'));
 
-        if (1 === (int)$request->get('return_to_edit')) {
+        if (1 === (int) $request->get('return_to_edit')) {
             $request->session()->put('bills.edit.fromUpdate', true);
 
             $redirect = redirect(route('bills.edit', [$bill->id]))->withInput(['return_to_edit' => 1]);

@@ -33,11 +33,15 @@ use Illuminate\Support\Collection;
  */
 interface SearchInterface
 {
+    public function getExcludedWords(): array;
+
     public function getInvalidOperators(): array;
 
     public function getModifiers(): Collection;
 
     public function getOperators(): Collection;
+
+    public function getWords(): array;
 
     public function getWordsAsString(): string;
 

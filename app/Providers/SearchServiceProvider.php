@@ -24,9 +24,13 @@ declare(strict_types=1);
 namespace FireflyIII\Providers;
 
 use FireflyIII\Support\Search\OperatorQuerySearch;
+use FireflyIII\Support\Search\QueryParser\GdbotsQueryParser;
+use FireflyIII\Support\Search\QueryParser\QueryParser;
+use FireflyIII\Support\Search\QueryParser\QueryParserInterface;
 use FireflyIII\Support\Search\SearchInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class SearchServiceProvider.
@@ -41,11 +45,22 @@ class SearchServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         $this->app->bind(
-            SearchInterface::class,
-            static function (Application $app) {
+            static function (): QueryParserInterface {
+                $implementation = config('search.query_parser');
+
+                return match ($implementation) {
+                    'new'   => app(QueryParser::class),
+                    default => app(GdbotsQueryParser::class),
+                };
+            }
+        );
+
+        $this->app->bind(
+            static function (Application $app): SearchInterface {
                 /** @var OperatorQuerySearch $search */
                 $search = app(OperatorQuerySearch::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)

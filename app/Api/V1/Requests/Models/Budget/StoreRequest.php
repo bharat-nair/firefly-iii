@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BudgetStoreRequest.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Budget;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Support\Request\ChecksLogin;
@@ -30,7 +32,6 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Validation\AutoBudget\ValidatesAutoBudgetRequest;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class StoreRequest
@@ -47,17 +48,20 @@ class StoreRequest extends FormRequest
     public function getAll(): array
     {
         $fields = [
-            'name'               => ['name', 'convertString'],
-            'active'             => ['active', 'boolean'],
-            'order'              => ['active', 'convertInteger'],
-            'notes'              => ['notes', 'convertString'],
+            'name'                    => ['name', 'convertString'],
+            'active'                  => ['active', 'boolean'],
+            'order'                   => ['active', 'convertInteger'],
+            'notes'                   => ['notes', 'convertString'],
 
             // auto budget currency:
-            'currency_id'        => ['auto_budget_currency_id', 'convertInteger'],
-            'currency_code'      => ['auto_budget_currency_code', 'convertString'],
-            'auto_budget_type'   => ['auto_budget_type', 'convertString'],
-            'auto_budget_amount' => ['auto_budget_amount', 'convertString'],
-            'auto_budget_period' => ['auto_budget_period', 'convertString'],
+            'currency_id'             => ['auto_budget_currency_id', 'convertInteger'],
+            'currency_code'           => ['auto_budget_currency_code', 'convertString'],
+            'auto_budget_type'        => ['auto_budget_type', 'convertString'],
+            'auto_budget_amount'      => ['auto_budget_amount', 'convertString'],
+            'auto_budget_period'      => ['auto_budget_period', 'convertString'],
+
+            // webhooks
+            'fire_webhooks'           => ['fire_webhooks', 'boolean'],
         ];
 
         return $this->getAllData($fields);
@@ -69,15 +73,18 @@ class StoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'               => 'required|min:1|max:255|uniqueObjectForUser:budgets,name',
-            'active'             => [new IsBoolean()],
-            'currency_id'        => 'exists:transaction_currencies,id',
-            'currency_code'      => 'exists:transaction_currencies,code',
-            'notes'              => 'nullable|min:1|max:32768',
+            'name'                       => 'required|min:1|max:255|uniqueObjectForUser:budgets,name',
+            'active'                     => [new IsBoolean()],
+            'currency_id'                => 'exists:transaction_currencies,id',
+            'currency_code'              => 'exists:transaction_currencies,code',
+            'notes'                      => 'nullable|min:1|max:32768',
             // auto budget info
-            'auto_budget_type'   => 'in:reset,rollover,adjusted,none',
-            'auto_budget_amount' => ['required_if:auto_budget_type,reset', 'required_if:auto_budget_type,rollover', 'required_if:auto_budget_type,adjusted', new IsValidPositiveAmount()],
-            'auto_budget_period' => 'in:daily,weekly,monthly,quarterly,half_year,yearly|required_if:auto_budget_type,reset|required_if:auto_budget_type,rollover|required_if:auto_budget_type,adjusted',
+            'auto_budget_type'           => 'in:reset,rollover,adjusted,none',
+            'auto_budget_amount'         => ['required_if:auto_budget_type,reset', 'required_if:auto_budget_type,rollover', 'required_if:auto_budget_type,adjusted', new IsValidPositiveAmount()],
+            'auto_budget_period'         => 'in:daily,weekly,monthly,quarterly,half_year,yearly|required_if:auto_budget_type,reset|required_if:auto_budget_type,rollover|required_if:auto_budget_type,adjusted',
+
+            // webhooks
+            'fire_webhooks'              => [new IsBoolean()],
         ];
     }
 
@@ -93,7 +100,7 @@ class StoreRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

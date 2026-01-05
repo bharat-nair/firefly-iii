@@ -30,20 +30,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperTransactionJournalLink
- */
 class TransactionJournalLink extends Model
 {
     use ReturnsIntegerIdTrait;
 
-    protected $casts
-                     = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-        ];
-
-    /** @var string The table to store the data in */
     protected $table = 'journal_links';
 
     /**
@@ -93,24 +83,32 @@ class TransactionJournalLink extends Model
         return $this->belongsTo(TransactionJournal::class, 'source_id');
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
+
     protected function destinationId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function linkTypeId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function sourceId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * SelectController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Rule;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
@@ -38,6 +40,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Class SelectController.
@@ -72,20 +75,25 @@ class SelectController extends Controller
         /** @var User $user */
         $user          = auth()->user();
         $accounts      = implode(',', $request->get('accounts'));
-        $startDate     = new Carbon($request->get('start'));
-        $endDate       = new Carbon($request->get('end'));
-
         // create new rule engine:
         $newRuleEngine = app(RuleEngineInterface::class);
         $newRuleEngine->setUser($user);
 
+        // add date operators.
+        if (null !== $request->get('start')) {
+            $startDate = new Carbon($request->get('start'));
+            $newRuleEngine->addOperator(['type' => 'date_after', 'value' => $startDate->format('Y-m-d')]);
+        }
+        if (null !== $request->get('end')) {
+            $endDate = new Carbon($request->get('end'));
+            $newRuleEngine->addOperator(['type' => 'date_before', 'value' => $endDate->format('Y-m-d')]);
+        }
+
         // add extra operators:
-        $newRuleEngine->addOperator(['type' => 'date_after', 'value' => $startDate->format('Y-m-d')]);
-        $newRuleEngine->addOperator(['type' => 'date_before', 'value' => $endDate->format('Y-m-d')]);
         $newRuleEngine->addOperator(['type' => 'account_id', 'value' => $accounts]);
 
         // set rules:
-        $newRuleEngine->setRules(new Collection([$rule]));
+        $newRuleEngine->setRules(new Collection()->push($rule));
         $newRuleEngine->fire();
         $resultCount   = $newRuleEngine->getResults();
 
@@ -105,11 +113,9 @@ class SelectController extends Controller
             return redirect(route('rules.index'));
         }
         // does the user have shared accounts?
-        $first    = session('first', today(config('app.timezone'))->subYear())->format('Y-m-d');
-        $today    = today(config('app.timezone'))->format('Y-m-d');
         $subTitle = (string)trans('firefly.apply_rule_selection', ['title' => $rule->title]);
 
-        return view('rules.rule.select-transactions', compact('first', 'today', 'rule', 'subTitle'));
+        return view('rules.rule.select-transactions', ['rule' => $rule, 'subTitle' => $subTitle]);
     }
 
     /**
@@ -157,7 +163,7 @@ class SelectController extends Controller
         $newRuleEngine      = app(RuleEngineInterface::class);
 
         // set rules:
-        $newRuleEngine->setRules(new Collection([$rule]));
+        $newRuleEngine->setRules(new Collection()->push($rule));
         $newRuleEngine->setRefreshTriggers(false);
         $collection         = $newRuleEngine->find();
         $collection         = $collection->slice(0, 20);
@@ -173,9 +179,9 @@ class SelectController extends Controller
 
         try {
             $view = view('list.journals-array-tiny', ['groups' => $collection])->render();
-        } catch (\Throwable $exception) {
-            app('log')->error(sprintf('Could not render view in testTriggers(): %s', $exception->getMessage()));
-            app('log')->error($exception->getTraceAsString());
+        } catch (Throwable $exception) {
+            Log::error(sprintf('Could not render view in testTriggers(): %s', $exception->getMessage()));
+            Log::error($exception->getTraceAsString());
             $view = sprintf('Could not render list.journals-tiny: %s', $exception->getMessage());
 
             throw new FireflyException($view, 0, $exception);
@@ -201,7 +207,7 @@ class SelectController extends Controller
         $newRuleEngine = app(RuleEngineInterface::class);
 
         // set rules:
-        $newRuleEngine->setRules(new Collection([$rule]));
+        $newRuleEngine->setRules(new Collection()->push($rule));
         $collection    = $newRuleEngine->find();
         $collection    = $collection->slice(0, 20);
 
@@ -215,10 +221,10 @@ class SelectController extends Controller
 
         try {
             $view = view('list.journals-array-tiny', ['groups' => $collection])->render();
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             $message = sprintf('Could not render view in testTriggersByRule(): %s', $exception->getMessage());
-            app('log')->error($message);
-            app('log')->error($exception->getTraceAsString());
+            Log::error($message);
+            Log::error($exception->getTraceAsString());
 
             throw new FireflyException($message, 0, $exception);
         }

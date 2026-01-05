@@ -1,4 +1,5 @@
 <?php
+
 /*
  * RefreshNotesTrait.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -32,7 +33,7 @@ trait RefreshNotesTrait
     final protected function refreshNotes(array $transaction): array
     {
         $transaction['notes'] = '';
-        $dbNote               = Note::where('noteable_id', (int)$transaction['transaction_journal_id'])->where('noteable_type', TransactionJournal::class)->first(['notes.*']);
+        $dbNote               = Note::where('noteable_id', (int) $transaction['transaction_journal_id'])->where('noteable_type', TransactionJournal::class)->first(['notes.*']);
         if (null !== $dbNote) {
             $transaction['notes'] = $dbNote->text;
         }

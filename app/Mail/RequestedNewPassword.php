@@ -36,15 +36,10 @@ class RequestedNewPassword extends Mailable
     use Queueable;
     use SerializesModels;
 
-    public string $url;
-
     /**
      * RequestedNewPassword constructor.
      */
-    public function __construct(string $url)
-    {
-        $this->url = $url;
-    }
+    public function __construct(public string $url) {}
 
     /**
      * Build the message.
@@ -55,7 +50,7 @@ class RequestedNewPassword extends Mailable
     {
         return $this
             ->markdown('emails.password')
-            ->subject((string)trans('email.reset_pw_subject'))
+            ->subject((string) trans('email.reset_pw_subject'))
         ;
     }
 }

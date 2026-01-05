@@ -23,28 +23,31 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\Attachment;
 
+use Illuminate\Support\Facades\Log;
+use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\AttachmentFactory;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Note;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use League\Flysystem\UnableToDeleteFile;
+use LogicException;
 
 /**
  * Class AttachmentRepository.
  */
-class AttachmentRepository implements AttachmentRepositoryInterface
+class AttachmentRepository implements AttachmentRepositoryInterface, UserGroupInterface
 {
-    /** @var User */
-    private $user;
+    use UserGroupTrait;
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function destroy(Attachment $attachment): bool
     {
@@ -55,7 +58,7 @@ class AttachmentRepository implements AttachmentRepositoryInterface
 
         try {
             Storage::disk('upload')->delete($path);
-        } catch (UnableToDeleteFile $e) {
+        } catch (UnableToDeleteFile) {
             // @ignoreException
         }
         $attachment->delete();
@@ -71,12 +74,12 @@ class AttachmentRepository implements AttachmentRepositoryInterface
         $unencryptedContent = '';
 
         if ($disk->exists($file)) {
-            $encryptedContent = (string)$disk->get($file);
+            $encryptedContent = (string) $disk->get($file);
 
             try {
-                $unencryptedContent = \Crypt::decrypt($encryptedContent); // verified
+                $unencryptedContent = Crypt::decrypt($encryptedContent); // verified
             } catch (DecryptException $e) {
-                app('log')->debug(sprintf('Could not decrypt attachment #%d but this is fine: %s', $attachment->id, $e->getMessage()));
+                Log::debug(sprintf('Could not decrypt attachment #%d but this is fine: %s', $attachment->id, $e->getMessage()));
                 $unencryptedContent = $encryptedContent;
             }
         }
@@ -104,7 +107,7 @@ class AttachmentRepository implements AttachmentRepositoryInterface
     {
         $note = $attachment->notes()->first();
         if (null !== $note) {
-            return (string)$note->text;
+            return (string) $note->text;
         }
 
         return null;
@@ -126,33 +129,26 @@ class AttachmentRepository implements AttachmentRepositoryInterface
         return $result;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     public function update(Attachment $attachment, array $data): Attachment
     {
         if (array_key_exists('title', $data)) {
             $attachment->title = $data['title'];
         }
 
-        if (array_key_exists('filename', $data) && '' !== (string)$data['filename'] && $data['filename'] !== $attachment->filename) {
+        if (array_key_exists('filename', $data) && '' !== (string) $data['filename'] && $data['filename'] !== $attachment->filename) {
             $attachment->filename = $data['filename'];
         }
         // update model (move attachment)
         // should be validated already:
         if (array_key_exists('attachable_type', $data) && array_key_exists('attachable_id', $data)) {
-            $attachment->attachable_id   = (int)$data['attachable_id'];
+            $attachment->attachable_id   = (int) $data['attachable_id'];
             $attachment->attachable_type = sprintf('FireflyIII\Models\%s', $data['attachable_type']);
         }
 
         $attachment->save();
         $attachment->refresh();
         if (array_key_exists('notes', $data)) {
-            $this->updateNote($attachment, (string)$data['notes']);
+            $this->updateNote($attachment, (string) $data['notes']);
         }
 
         return $attachment;
@@ -165,8 +161,8 @@ class AttachmentRepository implements AttachmentRepositoryInterface
             if (null !== $dbNote) {
                 try {
                     $dbNote->delete();
-                } catch (\LogicException $e) {
-                    app('log')->error($e->getMessage());
+                } catch (LogicException $e) {
+                    Log::error($e->getMessage());
                 }
             }
 

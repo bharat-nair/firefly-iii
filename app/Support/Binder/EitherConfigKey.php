@@ -39,7 +39,6 @@ class EitherConfigKey
 
             // firefly iii settings
             'firefly.version',
-            'firefly.api_version',
             'firefly.default_location',
             'firefly.account_to_transaction',
             'firefly.allowed_opposing_types',
@@ -53,17 +52,23 @@ class EitherConfigKey
             'firefly.languages',
             'app.timezone',
             'firefly.valid_view_ranges',
+            'firefly.preselected_accounts',
 
             // triggers and actions:
             'firefly.rule-actions',
             'firefly.context-rule-actions',
             'search.operators',
+
+            // webhooks
+            'webhook.triggers',
+            'webhook.responses',
+            'webhook.deliveries',
         ];
 
     /**
      * @throws NotFoundHttpException
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public static function routeBinder(string $value, Route $route): string
     {

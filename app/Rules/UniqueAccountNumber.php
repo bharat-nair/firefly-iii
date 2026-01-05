@@ -1,4 +1,5 @@
 <?php
+
 /**
  * UniqueAccountNumber.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,40 +24,39 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Illuminate\Support\Facades\Log;
+use Closure;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountMeta;
-use FireflyIII\Models\AccountType;
 use Illuminate\Contracts\Validation\ValidationRule;
+
+use function Safe\json_encode;
 
 /**
  * Class UniqueAccountNumber
  */
 class UniqueAccountNumber implements ValidationRule
 {
-    private ?Account $account;
-    private ?string  $expectedType;
-
     /**
      * Create a new rule instance.
      */
-    public function __construct(?Account $account, ?string $expectedType)
+    public function __construct(private readonly ?Account $account, private ?string $expectedType)
     {
         app('log')
             ->debug('Constructed UniqueAccountNumber')
         ;
-        $this->account      = $account;
-        $this->expectedType = $expectedType;
         // a very basic fix to make sure we get the correct account type:
-        if ('expense' === $expectedType) {
-            $this->expectedType = AccountType::EXPENSE;
+        if ('expense' === $this->expectedType) {
+            $this->expectedType = AccountTypeEnum::EXPENSE->value;
         }
-        if ('revenue' === $expectedType) {
-            $this->expectedType = AccountType::REVENUE;
+        if ('revenue' === $this->expectedType) {
+            $this->expectedType = AccountTypeEnum::REVENUE->value;
         }
-        if ('asset' === $expectedType) {
-            $this->expectedType = AccountType::ASSET;
+        if ('asset' === $this->expectedType) {
+            $this->expectedType = AccountTypeEnum::ASSET->value;
         }
-        app('log')->debug(sprintf('Expected type is "%s"', $this->expectedType));
+        Log::debug(sprintf('Expected type is "%s"', $this->expectedType));
     }
 
     /**
@@ -64,13 +64,13 @@ class UniqueAccountNumber implements ValidationRule
      */
     public function message(): string
     {
-        return (string)trans('validation.unique_account_number_for_user');
+        return (string) trans('validation.unique_account_number_for_user');
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!auth()->check()) {
             return;
@@ -78,13 +78,19 @@ class UniqueAccountNumber implements ValidationRule
         if (null === $this->expectedType) {
             return;
         }
+        if (is_array($value)) {
+            $fail('validation.generic_invalid')->translate();
+
+            return;
+        }
+        $value     = (string) $value;
         $maxCounts = $this->getMaxOccurrences();
 
         foreach ($maxCounts as $type => $max) {
             $count = $this->countHits($type, $value);
-            app('log')->debug(sprintf('Count for "%s" and account number "%s" is %d', $type, $value, $count));
+            Log::debug(sprintf('Count for "%s" and account number "%s" is %d', $type, $value, $count));
             if ($count > $max) {
-                app('log')->debug(
+                Log::debug(
                     sprintf(
                         'account number "%s" is in use with %d account(s) of type "%s", which is too much for expected type "%s"',
                         $value,
@@ -99,26 +105,26 @@ class UniqueAccountNumber implements ValidationRule
                 return;
             }
         }
-        app('log')->debug('Account number is valid.');
+        Log::debug('Account number is valid.');
     }
 
     private function getMaxOccurrences(): array
     {
         $maxCounts = [
-            AccountType::ASSET   => 0,
-            AccountType::EXPENSE => 0,
-            AccountType::REVENUE => 0,
+            AccountTypeEnum::ASSET->value   => 0,
+            AccountTypeEnum::EXPENSE->value => 0,
+            AccountTypeEnum::REVENUE->value => 0,
         ];
 
-        if ('expense' === $this->expectedType || AccountType::EXPENSE === $this->expectedType) {
+        if ('expense' === $this->expectedType || AccountTypeEnum::EXPENSE->value === $this->expectedType) {
             // IBAN should be unique amongst expense and asset accounts.
             // may appear once in revenue accounts
-            $maxCounts[AccountType::REVENUE] = 1;
+            $maxCounts[AccountTypeEnum::REVENUE->value] = 1;
         }
-        if ('revenue' === $this->expectedType || AccountType::REVENUE === $this->expectedType) {
+        if ('revenue' === $this->expectedType || AccountTypeEnum::REVENUE->value === $this->expectedType) {
             // IBAN should be unique amongst revenue and asset accounts.
             // may appear once in expense accounts
-            $maxCounts[AccountType::EXPENSE] = 1;
+            $maxCounts[AccountTypeEnum::EXPENSE->value] = 1;
         }
 
         return $maxCounts;
@@ -134,7 +140,7 @@ class UniqueAccountNumber implements ValidationRule
             ->where('account_meta.data', json_encode($accountNumber))
         ;
 
-        if (null !== $this->account) {
+        if ($this->account instanceof Account) {
             $query->where('accounts.id', '!=', $this->account->id);
         }
 

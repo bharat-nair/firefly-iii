@@ -25,21 +25,45 @@ declare(strict_types=1);
 namespace FireflyIII\Handlers\Events\Model;
 
 use FireflyIII\Events\Model\PiggyBank\ChangedAmount;
+use FireflyIII\Events\Model\PiggyBank\ChangedName;
+use FireflyIII\Models\Account;
 use FireflyIII\Models\PiggyBankEvent;
+use FireflyIII\Models\Rule;
+use FireflyIII\Models\RuleAction;
+use FireflyIII\Models\TransactionGroup;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class PiggyBankEventHandler
  */
 class PiggyBankEventHandler
 {
+    public function changedPiggyBankName(ChangedName $event): void
+    {
+        // loop all accounts, collect all user's rules.
+        /** @var Account $account */
+        foreach ($event->piggyBank->accounts as $account) {
+            /** @var Rule $rule */
+            foreach ($account->user->rules as $rule) {
+                /** @var RuleAction $ruleAction */
+                foreach ($rule->ruleActions()->where('action_type', 'update_piggy')->get() as $ruleAction) {
+                    if ($event->oldName === $ruleAction->action_value) {
+                        $ruleAction->action_value = $event->newName;
+                        $ruleAction->save();
+                    }
+                }
+            }
+        }
+    }
+
     public function changePiggyAmount(ChangedAmount $event): void
     {
         // find journal if group is present.
         $journal = $event->transactionJournal;
-        if (null !== $event->transactionGroup) {
+        if ($event->transactionGroup instanceof TransactionGroup) {
             $journal = $event->transactionGroup->transactionJournals()->first();
         }
-        $date    = $journal?->date ?? today(config('app.timezone'));
+        $date    = $journal->date ?? today(config('app.timezone'));
         // sanity check: event must not already exist for this journal and piggy bank.
         if (null !== $journal) {
             $exists = PiggyBankEvent::where('piggy_bank_id', $event->piggyBank->id)
@@ -47,7 +71,7 @@ class PiggyBankEventHandler
                 ->exists()
             ;
             if ($exists) {
-                app('log')->warning('Already have event for this journal and piggy, will not create another.');
+                Log::warning('Already have event for this journal and piggy, will not create another.');
 
                 return;
             }
@@ -58,6 +82,7 @@ class PiggyBankEventHandler
                 'piggy_bank_id'          => $event->piggyBank->id,
                 'transaction_journal_id' => $journal?->id,
                 'date'                   => $date->format('Y-m-d'),
+                'date_tz'                => $date->format('e'),
                 'amount'                 => $event->amount,
             ]
         );

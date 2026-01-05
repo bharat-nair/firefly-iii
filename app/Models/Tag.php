@@ -23,9 +23,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Casts\SeparateTimezoneCaster;
+use FireflyIII\Handlers\Observer\TagObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -33,29 +36,16 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperTag
- */
+#[ObservedBy([TagObserver::class])]
 class Tag extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'date'       => 'date',
-            'zoomLevel'  => 'int',
-            'latitude'   => 'float',
-            'longitude'  => 'float',
-        ];
+    protected $fillable = ['user_id', 'user_group_id', 'tag', 'date', 'date_tz', 'description', 'tag_mode'];
 
-    protected $fillable = ['user_id', 'user_group_id', 'tag', 'date', 'description', 'tagMode'];
-
-    protected $hidden   = ['zoomLevel', 'latitude', 'longitude'];
+    protected $hidden   = ['zoomLevel', 'zoom_level', 'latitude', 'longitude'];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -98,5 +88,25 @@ class Tag extends Model
     public function transactionJournals(): BelongsToMany
     {
         return $this->belongsToMany(TransactionJournal::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'date'          => SeparateTimezoneCaster::class,
+            'zoomLevel'     => 'int',
+            'latitude'      => 'float',
+            'longitude'     => 'float',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
+    }
+
+    public function primaryPeriodStatistics(): MorphMany
+    {
+        return $this->morphMany(PeriodStatistic::class, 'primary_statable');
     }
 }

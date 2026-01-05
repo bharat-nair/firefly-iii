@@ -29,6 +29,7 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class RequestedReportOnJournals
@@ -39,25 +40,18 @@ class RequestedReportOnJournals
     use InteractsWithSockets;
     use SerializesModels;
 
-    public Collection $groups;
-    public int        $userId;
-
     /**
      * Create a new event instance.
      */
-    public function __construct(int $userId, Collection $groups)
+    public function __construct(public int $userId, public Collection $groups)
     {
-        app('log')->debug('In event RequestedReportOnJournals.');
-        $this->userId = $userId;
-        $this->groups = $groups;
+        Log::debug('In event RequestedReportOnJournals.');
     }
 
     /**
      * Get the channels the event should broadcast on.
-     *
-     * @return PrivateChannel
      */
-    public function broadcastOn()
+    public function broadcastOn(): PrivateChannel
     {
         return new PrivateChannel('channel-name');
     }

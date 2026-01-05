@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RuleController.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,8 +24,10 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
+use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteApiRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Rule;
 use FireflyIII\Repositories\Rule\RuleRepositoryInterface;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +38,7 @@ use Illuminate\Http\JsonResponse;
 class RuleController extends Controller
 {
     private RuleRepositoryInterface $repository;
+    protected array                 $acceptedRoles = [UserRoleEnum::READ_RULES];
 
     /**
      * RuleController constructor.
@@ -43,23 +47,20 @@ class RuleController extends Controller
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
                 $this->repository = app(RuleRepositoryInterface::class);
-                $this->repository->setUser(auth()->user());
+                $this->repository->setUser($this->user);
+                $this->repository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
         );
     }
 
-    /**
-     * This endpoint is documented at:
-     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getRulesAC
-     */
-    public function rules(AutocompleteRequest $request): JsonResponse
+    public function rules(AutocompleteApiRequest $request): JsonResponse
     {
-        $data     = $request->getData();
-        $rules    = $this->repository->searchRule($data['query'], $this->parameters->get('limit'));
+        $rules    = $this->repository->searchRule($request->attributes->get('query'), $request->attributes->get('limit'));
         $response = [];
 
         /** @var Rule $rule */
@@ -68,9 +69,10 @@ class RuleController extends Controller
                 'id'          => (string)$rule->id,
                 'name'        => $rule->title,
                 'description' => $rule->description,
+                'active'      => $rule->active,
             ];
         }
 
-        return response()->json($response);
+        return response()->api($response);
     }
 }

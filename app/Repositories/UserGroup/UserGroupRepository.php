@@ -24,26 +24,31 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\UserGroup;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\UserGroupFactory;
 use FireflyIII\Models\GroupMembership;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\Models\UserRole;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
+use Override;
+use ValueError;
 
 /**
  * Class UserGroupRepository
  */
-class UserGroupRepository implements UserGroupRepositoryInterface
+class UserGroupRepository implements UserGroupRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     public function destroy(UserGroup $userGroup): void
     {
-        app('log')->debug(sprintf('Going to destroy user group #%d ("%s").', $userGroup->id, $userGroup->title));
+        Log::debug(sprintf('Going to destroy user group #%d ("%s").', $userGroup->id, $userGroup->title));
         $memberships = $userGroup->groupMemberships()->get();
 
         /** @var GroupMembership $membership */
@@ -53,19 +58,19 @@ class UserGroupRepository implements UserGroupRepositoryInterface
             if (null === $user) {
                 continue;
             }
-            app('log')->debug(sprintf('Processing membership #%d (user #%d "%s")', $membership->id, $user->id, $user->email));
+            Log::debug(sprintf('Processing membership #%d (user #%d "%s")', $membership->id, $user->id, $user->email));
             // user has memberships of other groups?
             $count = $user->groupMemberships()->where('user_group_id', '!=', $userGroup->id)->count();
             if (0 === $count) {
-                app('log')->debug('User has no other memberships and needs a new user group.');
+                Log::debug('User has no other memberships and needs a new user group.');
                 $newUserGroup        = $this->createNewUserGroup($user);
                 $user->user_group_id = $newUserGroup->id;
                 $user->save();
-                app('log')->debug(sprintf('Make new group #%d ("%s")', $newUserGroup->id, $newUserGroup->title));
+                Log::debug(sprintf('Make new group #%d ("%s")', $newUserGroup->id, $newUserGroup->title));
             }
             // user has other memberships, select one at random and assign it to the user.
             if ($count > 0) {
-                app('log')->debug('User has other memberships and will be assigned a new administration.');
+                Log::debug('User has other memberships and will be assigned a new administration.');
 
                 /** @var GroupMembership $first */
                 $first               = $user->groupMemberships()->where('user_group_id', '!=', $userGroup->id)->inRandomOrder()->first();
@@ -87,13 +92,11 @@ class UserGroupRepository implements UserGroupRepositoryInterface
             }
         }
         $userGroup->delete();
-        app('log')->debug('Done!');
+        Log::debug('Done!');
     }
 
     /**
      * Returns all groups the user is member in.
-     *
-     * {@inheritDoc}
      */
     public function get(): Collection
     {
@@ -130,16 +133,12 @@ class UserGroupRepository implements UserGroupRepositoryInterface
         $existingGroup = null;
         while ($exists && $loop < 10) {
             $existingGroup = $this->findByName($groupName);
-            if (null === $existingGroup) {
+            if (!$existingGroup instanceof UserGroup) {
                 $exists        = false;
 
-                /** @var null|UserGroup $existingGroup */
                 $existingGroup = $this->store(['user' => $user, 'title' => $groupName]);
             }
-            if (null !== $existingGroup) {
-                // group already exists
-                $groupName = sprintf('%s-%s', $user->email, substr(sha1(rand(1000, 9999).microtime()), 0, 4));
-            }
+            $groupName     = sprintf('%s-%s', $user->email, substr(sha1(random_int(1000, 9999).microtime()), 0, 4));
             ++$loop;
         }
 
@@ -166,55 +165,75 @@ class UserGroupRepository implements UserGroupRepositoryInterface
 
     /**
      * Returns all groups.
-     *
-     * {@inheritDoc}
      */
     public function getAll(): Collection
     {
         return UserGroup::all();
     }
 
-    public function setUser(null|Authenticatable|User $user): void
+    #[Override]
+    public function getById(int $id): ?UserGroup
     {
-        app('log')->debug(sprintf('Now in %s', __METHOD__));
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
+        return UserGroup::find($id);
+    }
+
+    #[Override]
+    public function getMembershipsFromGroupId(int $groupId): Collection
+    {
+        return $this->user->groupMemberships()->where('user_group_id', $groupId)->get();
     }
 
     public function update(UserGroup $userGroup, array $data): UserGroup
     {
         $userGroup->title = $data['title'];
         $userGroup->save();
+        $currency         = null;
+
+        /** @var CurrencyRepositoryInterface $repository */
+        $repository       = app(CurrencyRepositoryInterface::class);
+
+        if (array_key_exists('primary_currency_code', $data)) {
+            $repository->setUser($this->user);
+            $currency = $repository->findByCode($data['primary_currency_code']);
+        }
+
+        if (array_key_exists('primary_currency_id', $data) && null === $currency) {
+            $repository->setUser($this->user);
+            $currency = $repository->find((int)$data['primary_currency_id']);
+        }
+        if (null !== $currency) {
+            $repository->makePrimary($currency);
+        }
+
 
         return $userGroup;
     }
 
     /**
-     * @SuppressWarnings(PHPMD.NPathComplexity)
+     * @SuppressWarnings("PHPMD.NPathComplexity")
      *
      * @throws FireflyException
      */
     public function updateMembership(UserGroup $userGroup, array $data): UserGroup
     {
         $owner           = UserRole::whereTitle(UserRoleEnum::OWNER)->first();
-        app('log')->debug('in update membership');
+        Log::debug('in update membership');
 
         /** @var null|User $user */
         $user            = null;
         if (array_key_exists('id', $data)) {
             /** @var null|User $user */
             $user = User::find($data['id']);
-            app('log')->debug('Found user by ID');
+            Log::debug('Found user by ID');
         }
         if (array_key_exists('email', $data) && '' !== (string)$data['email']) {
             /** @var null|User $user */
             $user = User::whereEmail($data['email'])->first();
-            app('log')->debug('Found user by email');
+            Log::debug('Found user by email');
         }
         if (null === $user) {
             // should throw error, but validator already catches this.
-            app('log')->debug('No user found');
+            Log::debug('No user found');
 
             return $userGroup;
         }
@@ -226,13 +245,13 @@ class UserGroupRepository implements UserGroupRepositoryInterface
             $lastUserId = $userGroup->groupMemberships()->distinct()->first(['group_memberships.user_id'])->user_id;
             // if this is also the user we're editing right now, and we remove all of their roles:
             if ($lastUserId === (int)$user->id && 0 === count($data['roles'])) {
-                app('log')->debug('User is last in this group, refuse to act');
+                Log::debug('User is last in this group, refuse to act');
 
                 throw new FireflyException('You cannot remove the last member from this user group. Delete the user group instead.');
             }
             // if this is also the user we're editing right now, and do not grant them the owner role:
             if ($lastUserId === (int)$user->id && count($data['roles']) > 0 && !in_array(UserRoleEnum::OWNER->value, $data['roles'], true)) {
-                app('log')->debug('User needs to have owner role in this group, refuse to act');
+                Log::debug('User needs to have owner role in this group, refuse to act');
 
                 throw new FireflyException('The last member in this user group must get or keep the "owner" role.');
             }
@@ -249,7 +268,7 @@ class UserGroupRepository implements UserGroupRepositoryInterface
                 && (0 === count($data['roles'])
                     || (count($data['roles']) > 0 // @phpstan-ignore-line
                         && !in_array(UserRoleEnum::OWNER->value, $data['roles'], true)))) {
-                app('log')->debug('User needs to keep owner role in this group, refuse to act');
+                Log::debug('User needs to keep owner role in this group, refuse to act');
 
                 throw new FireflyException('The last owner in this user group must keep the "owner" role.');
             }
@@ -262,7 +281,7 @@ class UserGroupRepository implements UserGroupRepositoryInterface
         foreach ($rolesSimplified as $role) {
             try {
                 $enum = UserRoleEnum::from($role);
-            } catch (\ValueError $e) {
+            } catch (ValueError) {
                 // TODO error message
                 continue;
             }
@@ -276,12 +295,12 @@ class UserGroupRepository implements UserGroupRepositoryInterface
     private function simplifyListByName(array $roles): array
     {
         if (in_array(UserRoleEnum::OWNER->value, $roles, true)) {
-            app('log')->debug(sprintf('List of roles is [%1$s] but this includes "%2$s", so return [%2$s]', implode(',', $roles), UserRoleEnum::OWNER->value));
+            Log::debug(sprintf('List of roles is [%1$s] but this includes "%2$s", so return [%2$s]', implode(',', $roles), UserRoleEnum::OWNER->value));
 
             return [UserRoleEnum::OWNER->value];
         }
         if (in_array(UserRoleEnum::FULL->value, $roles, true)) {
-            app('log')->debug(sprintf('List of roles is [%1$s] but this includes "%2$s", so return [%2$s]', implode(',', $roles), UserRoleEnum::FULL->value));
+            Log::debug(sprintf('List of roles is [%1$s] but this includes "%2$s", so return [%2$s]', implode(',', $roles), UserRoleEnum::FULL->value));
 
             return [UserRoleEnum::FULL->value];
         }
@@ -289,22 +308,10 @@ class UserGroupRepository implements UserGroupRepositoryInterface
         return $roles;
     }
 
-    #[\Override]
+    #[Override]
     public function useUserGroup(UserGroup $userGroup): void
     {
         $this->user->user_group_id = $userGroup->id;
         $this->user->save();
-    }
-
-    #[\Override]
-    public function getMembershipsFromGroupId(int $groupId): Collection
-    {
-        return $this->user->groupMemberships()->where('user_group_id', $groupId)->get();
-    }
-
-    #[\Override]
-    public function getById(int $id): ?UserGroup
-    {
-        return UserGroup::find($id);
     }
 }

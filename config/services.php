@@ -1,4 +1,5 @@
 <?php
+
 /**
  * services.php
  * Copyright (c) 2019 james@firefly-iii.org.
@@ -59,5 +60,9 @@ return [
     ],
     'mandrill'  => [
         'secret' => env('MANDRILL_SECRET'),
+    ],
+    'pushover'  => [
+        'token'      => 'fake_token',
+        'user_token' => 'fake_token',
     ],
 ];

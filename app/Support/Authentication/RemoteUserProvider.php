@@ -24,22 +24,25 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Authentication;
 
-use FireflyIII\Console\Commands\Integrity\CreateGroupMemberships;
+use Illuminate\Support\Facades\Log;
+use FireflyIII\Console\Commands\Correction\CreatesGroupMemberships;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Role;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\UserProvider;
+use Illuminate\Support\Str;
+use Override;
 
 /**
  * Class RemoteUserProvider
  */
 class RemoteUserProvider implements UserProvider
 {
-    #[\Override]
+    #[Override]
     public function rehashPasswordIfRequired(Authenticatable $user, array $credentials, bool $force = false): void
     {
-        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        Log::debug(sprintf('Now at %s', __METHOD__));
 
         throw new FireflyException(sprintf('Did not implement %s', __METHOD__));
     }
@@ -47,11 +50,11 @@ class RemoteUserProvider implements UserProvider
     /**
      * @throws FireflyException
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function retrieveByCredentials(array $credentials): ?Authenticatable
     {
-        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        Log::debug(sprintf('Now at %s', __METHOD__));
 
         throw new FireflyException(sprintf('Did not implement %s', __METHOD__));
     }
@@ -63,16 +66,16 @@ class RemoteUserProvider implements UserProvider
      */
     public function retrieveById($identifier): User
     {
-        app('log')->debug(sprintf('Now at %s(%s)', __METHOD__, $identifier));
+        Log::debug(sprintf('Now at %s(%s)', __METHOD__, $identifier));
         $user = User::where('email', $identifier)->first();
         if (null === $user) {
-            app('log')->debug(sprintf('User with email "%s" not found. Will be created.', $identifier));
+            Log::debug(sprintf('User with email "%s" not found. Will be created.', $identifier));
             $user = User::create(
                 [
                     'blocked'      => false,
                     'blocked_code' => null,
                     'email'        => $identifier,
-                    'password'     => bcrypt(\Str::random(64)),
+                    'password'     => bcrypt(Str::random(64)),
                 ]
             );
             // if this is the first user, give them admin as well.
@@ -82,9 +85,9 @@ class RemoteUserProvider implements UserProvider
             }
         }
         // make sure the user gets an administration as well.
-        CreateGroupMemberships::createGroupMembership($user);
+        CreatesGroupMemberships::createGroupMembership($user);
 
-        app('log')->debug(sprintf('Going to return user #%d (%s)', $user->id, $user->email));
+        Log::debug(sprintf('Going to return user #%d (%s)', $user->id, $user->email));
 
         return $user;
     }
@@ -95,17 +98,17 @@ class RemoteUserProvider implements UserProvider
      *
      * @throws FireflyException
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function retrieveByToken($identifier, $token): ?Authenticatable
     {
-        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        Log::debug(sprintf('Now at %s', __METHOD__));
 
         throw new FireflyException(sprintf('A) Did not implement %s', __METHOD__));
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      *
      * @param mixed $token
      *
@@ -113,7 +116,7 @@ class RemoteUserProvider implements UserProvider
      */
     public function updateRememberToken(Authenticatable $user, $token): void
     {
-        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        Log::debug(sprintf('Now at %s', __METHOD__));
 
         throw new FireflyException(sprintf('B) Did not implement %s', __METHOD__));
     }
@@ -121,11 +124,11 @@ class RemoteUserProvider implements UserProvider
     /**
      * @throws FireflyException
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function validateCredentials(Authenticatable $user, array $credentials): bool
     {
-        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        Log::debug(sprintf('Now at %s', __METHOD__));
 
         throw new FireflyException(sprintf('C) Did not implement %s', __METHOD__));
     }

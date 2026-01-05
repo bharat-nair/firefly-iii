@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BudgetTransformer.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,11 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Transformers;
 
-use FireflyIII\Models\AutoBudget;
+use FireflyIII\Enums\AutoBudgetType;
 use FireflyIII\Models\Budget;
-use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
-use FireflyIII\Repositories\Budget\OperationsRepositoryInterface;
-use Illuminate\Support\Collection;
+use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Support\Facades\Amount;
+use FireflyIII\Support\Facades\Steam;
 use Symfony\Component\HttpFoundation\ParameterBag;
 
 /**
@@ -35,17 +36,23 @@ use Symfony\Component\HttpFoundation\ParameterBag;
  */
 class BudgetTransformer extends AbstractTransformer
 {
-    private OperationsRepositoryInterface $opsRepository;
-    private BudgetRepositoryInterface     $repository;
+    private readonly bool                $convertToPrimary;
+    private readonly TransactionCurrency $primaryCurrency;
+    private array                        $types;
 
     /**
      * BudgetTransformer constructor.
      */
     public function __construct()
     {
-        $this->opsRepository = app(OperationsRepositoryInterface::class);
-        $this->repository    = app(BudgetRepositoryInterface::class);
-        $this->parameters    = new ParameterBag();
+        $this->parameters       = new ParameterBag();
+        $this->primaryCurrency  = Amount::getPrimaryCurrency();
+        $this->convertToPrimary = Amount::convertToPrimary();
+        $this->types            = [
+            AutoBudgetType::AUTO_BUDGET_RESET->value    => 'reset',
+            AutoBudgetType::AUTO_BUDGET_ROLLOVER->value => 'rollover',
+            AutoBudgetType::AUTO_BUDGET_ADJUSTED->value => 'adjusted',
+        ];
     }
 
     /**
@@ -53,51 +60,55 @@ class BudgetTransformer extends AbstractTransformer
      */
     public function transform(Budget $budget): array
     {
-        $this->opsRepository->setUser($budget->user);
-        $start          = $this->parameters->get('start');
-        $end            = $this->parameters->get('end');
-        $autoBudget     = $this->repository->getAutoBudget($budget);
-        $spent          = [];
-        if (null !== $start && null !== $end) {
-            $spent = $this->beautify($this->opsRepository->sumExpenses($start, $end, null, new Collection([$budget])));
-        }
 
-        $abCurrencyId   = null;
-        $abCurrencyCode = null;
-        $abType         = null;
-        $abAmount       = null;
-        $abPeriod       = null;
-        $notes          = $this->repository->getNoteText($budget);
+        // info for auto budget.
+        $abType    = null;
+        $abAmount  = null;
+        $abPrimary = null;
+        $abPeriod  = null;
 
-        $types          = [
-            AutoBudget::AUTO_BUDGET_RESET    => 'reset',
-            AutoBudget::AUTO_BUDGET_ROLLOVER => 'rollover',
-            AutoBudget::AUTO_BUDGET_ADJUSTED => 'adjusted',
-        ];
+        $currency  = $budget->meta['currency'] ?? null;
 
-        if (null !== $autoBudget) {
-            $abCurrencyId   = (string)$autoBudget->transactionCurrency->id;
-            $abCurrencyCode = $autoBudget->transactionCurrency->code;
-            $abType         = $types[$autoBudget->auto_budget_type];
-            $abAmount       = app('steam')->bcround($autoBudget->amount, $autoBudget->transactionCurrency->decimal_places);
-            $abPeriod       = $autoBudget->period;
+        if (null !== $budget->meta['auto_budget']) {
+            $abType    = $this->types[$budget->meta['auto_budget']['type']];
+            $abAmount  = Steam::bcround($budget->meta['auto_budget']['amount'], $currency->decimal_places);
+            $abPrimary = $this->convertToPrimary ? Steam::bcround($budget->meta['auto_budget']['pc_amount'], $this->primaryCurrency->decimal_places) : null;
+            $abPeriod  = $budget->meta['auto_budget']['period'];
         }
 
         return [
-            'id'                        => (string)$budget->id,
-            'created_at'                => $budget->created_at->toAtomString(),
-            'updated_at'                => $budget->updated_at->toAtomString(),
-            'active'                    => $budget->active,
-            'name'                      => $budget->name,
-            'order'                     => $budget->order,
-            'notes'                     => $notes,
-            'auto_budget_type'          => $abType,
-            'auto_budget_period'        => $abPeriod,
-            'auto_budget_currency_id'   => $abCurrencyId,
-            'auto_budget_currency_code' => $abCurrencyCode,
-            'auto_budget_amount'        => $abAmount,
-            'spent'                     => $spent,
-            'links'                     => [
+            'id'                              => (string)$budget->id,
+            'created_at'                      => $budget->created_at->toAtomString(),
+            'updated_at'                      => $budget->updated_at->toAtomString(),
+            'active'                          => $budget->active,
+            'name'                            => $budget->name,
+            'order'                           => $budget->order,
+            'notes'                           => $budget->meta['notes'],
+            'auto_budget_type'                => $abType,
+            'auto_budget_period'              => $abPeriod,
+            'object_group_id'                 => $budget->meta['object_group_id'],
+            'object_group_order'              => $budget->meta['object_group_order'],
+            'object_group_title'              => $budget->meta['object_group_title'],
+
+            // new currency settings.
+            'object_has_currency_setting'     => null !== $budget->meta['currency'],
+            'currency_id'                     => null === $currency ? null : (string)$currency->id,
+            'currency_code'                   => $currency?->code,
+            'currency_name'                   => $currency?->name,
+            'currency_symbol'                 => $currency?->symbol,
+            'currency_decimal_places'         => $currency?->decimal_places,
+
+            'primary_currency_id'             => (string)$this->primaryCurrency->id,
+            'primary_currency_name'           => $this->primaryCurrency->name,
+            'primary_currency_code'           => $this->primaryCurrency->code,
+            'primary_currency_symbol'         => $this->primaryCurrency->symbol,
+            'primary_currency_decimal_places' => $this->primaryCurrency->decimal_places,
+
+            'auto_budget_amount'              => $abAmount,
+            'pc_auto_budget_amount'           => $abPrimary,
+            'spent'                           => null === $budget->meta['spent'] ? null : $this->beautify($budget->meta['spent']),
+            'pc_spent'                        => null === $budget->meta['pc_spent'] ? null : $this->beautify($budget->meta['pc_spent']),
+            'links'                           => [
                 [
                     'rel' => 'self',
                     'uri' => '/budgets/'.$budget->id,
@@ -110,7 +121,7 @@ class BudgetTransformer extends AbstractTransformer
     {
         $return = [];
         foreach ($array as $data) {
-            $data['sum'] = app('steam')->bcround($data['sum'], (int)$data['currency_decimal_places']);
+            $data['sum'] = Steam::bcround($data['sum'], (int)$data['currency_decimal_places']);
             $return[]    = $data;
         }
 

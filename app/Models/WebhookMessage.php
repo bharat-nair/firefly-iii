@@ -1,4 +1,5 @@
 <?php
+
 /*
  * WebhookMessage.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,29 +24,20 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\WebhookMessageObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperWebhookMessage
- */
+#[ObservedBy([WebhookMessageObserver::class])]
 class WebhookMessage extends Model
 {
     use ReturnsIntegerIdTrait;
-
-    protected $casts
-        = [
-            'sent'    => 'boolean',
-            'errored' => 'boolean',
-            'uuid'    => 'string',
-            'message' => 'json',
-            'logs'    => 'json',
-        ];
 
     /**
      * Route binder. Converts the key in the URL to the specified object (or throw 404).
@@ -80,20 +72,31 @@ class WebhookMessage extends Model
         return $this->hasMany(WebhookAttempt::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'sent'    => 'boolean',
+            'errored' => 'boolean',
+            'uuid'    => 'string',
+            'message' => 'json',
+            'logs'    => 'json',
+        ];
+    }
+
     /**
      * Get the amount
      */
     protected function sent(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (bool)$value,
+            get: static fn ($value): bool => (bool)$value,
         );
     }
 
     protected function webhookId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

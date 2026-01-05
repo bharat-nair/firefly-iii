@@ -1,4 +1,5 @@
 <?php
+
 /**
  * auth.php
  * Copyright (c) 2019 james@firefly-iii.org.
@@ -23,10 +24,6 @@ declare(strict_types=1);
 
 use FireflyIII\User;
 
-if ('ldap' === strtolower((string)env('AUTHENTICATION_GUARD'))) {
-    exit('LDAP is no longer supported by Firefly III v5.7+. Sorry about that. You will have to switch to "remote_user_guard", and use tools like Authelia or Keycloak to use LDAP together with Firefly III.');
-}
-
 return [
     /*
     |--------------------------------------------------------------------------
@@ -44,7 +41,7 @@ return [
         'passwords' => 'users',
     ],
     'guard_header'     => envNonEmpty('AUTHENTICATION_GUARD_HEADER', 'REMOTE_USER'),
-    'guard_email'      => envNonEmpty('AUTHENTICATION_GUARD_EMAIL', null),
+    'guard_email'      => envNonEmpty('AUTHENTICATION_GUARD_EMAIL'),
 
     /*
     |--------------------------------------------------------------------------

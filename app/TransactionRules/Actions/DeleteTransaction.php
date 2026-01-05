@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionGroup;
@@ -35,15 +36,10 @@ use FireflyIII\Services\Internal\Destroy\TransactionGroupDestroyService;
  */
 class DeleteTransaction implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -51,7 +47,7 @@ class DeleteTransaction implements ActionInterface
 
         // destroy entire group.
         if (1 === $count) {
-            app('log')->debug(
+            Log::debug(
                 sprintf(
                     'RuleAction DeleteTransaction DELETED the entire transaction group of journal #%d ("%s").',
                     $journal['transaction_journal_id'],
@@ -68,7 +64,7 @@ class DeleteTransaction implements ActionInterface
 
             return true;
         }
-        app('log')->debug(
+        Log::debug(
             sprintf('RuleAction DeleteTransaction DELETED transaction journal #%d ("%s").', $journal['transaction_journal_id'], $journal['description'])
         );
 

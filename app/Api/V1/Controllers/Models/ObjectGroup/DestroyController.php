@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DestroyController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -26,6 +27,7 @@ namespace FireflyIII\Api\V1\Controllers\Models\ObjectGroup;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Repositories\ObjectGroup\ObjectGroupRepositoryInterface;
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
@@ -63,7 +65,7 @@ class DestroyController extends Controller
     public function destroy(ObjectGroup $objectGroup): JsonResponse
     {
         $this->repository->destroy($objectGroup);
-        app('preferences')->mark();
+        Preferences::mark();
 
         return response()->json([], 204);
     }

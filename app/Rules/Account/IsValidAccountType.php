@@ -1,4 +1,5 @@
 <?php
+
 /*
  * IsValidAccountType.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -23,15 +24,17 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules\Account;
 
+use Closure;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Override;
 
 class IsValidAccountType implements ValidationRule
 {
     use AccountFilter;
 
-    #[\Override]
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    #[Override]
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         // only check the type.
         if (array_key_exists('type', $value)) {
@@ -43,7 +46,6 @@ class IsValidAccountType implements ValidationRule
             $filtered = [];
             $keys     = array_keys($this->types);
 
-            /** @var mixed $entry */
             foreach ($value as $entry) {
                 $entry = (string) $entry;
                 if (!in_array($entry, $keys, true)) {

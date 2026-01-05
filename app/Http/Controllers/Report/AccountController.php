@@ -23,12 +23,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Repositories\Account\AccountTaskerInterface;
 use FireflyIII\Support\CacheProperties;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Class AccountController.
@@ -57,10 +59,10 @@ class AccountController extends Controller
         $accountReport = $accountTasker->getAccountReport($accounts, $start, $end);
 
         try {
-            $result = view('reports.partials.accounts', compact('accountReport'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.accounts: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $result = view('reports.partials.accounts', ['accountReport' => $accountReport])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.accounts: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = 'Could not render view.';
 
             throw new FireflyException($result, 0, $e);

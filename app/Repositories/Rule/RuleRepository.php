@@ -23,27 +23,28 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\Rule;
 
+use Illuminate\Support\Facades\Log;
+use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Rule;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\RuleGroup;
 use FireflyIII\Models\RuleTrigger;
 use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use FireflyIII\Support\Search\OperatorQuerySearch;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Class RuleRepository.
  */
-class RuleRepository implements RuleRepositoryInterface
+class RuleRepository implements RuleRepositoryInterface, UserGroupInterface
 {
-    /** @var User */
-    private $user;
+    use UserGroupTrait;
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function destroy(Rule $rule): bool
     {
@@ -61,7 +62,7 @@ class RuleRepository implements RuleRepositoryInterface
     public function duplicate(Rule $rule): Rule
     {
         $newRule        = $rule->replicate();
-        $newRule->title = (string)trans('firefly.rule_copy_of', ['title' => $rule->title]);
+        $newRule->title = (string) trans('firefly.rule_copy_of', ['title' => $rule->title]);
         $newRule->save();
 
         // replicate all triggers
@@ -96,12 +97,13 @@ class RuleRepository implements RuleRepositoryInterface
      */
     public function getFirstRuleGroup(): RuleGroup
     {
+        /** @var null|RuleGroup */
         return $this->user->ruleGroups()->first();
     }
 
     public function getHighestOrderInRuleGroup(RuleGroup $ruleGroup): int
     {
-        return (int)$ruleGroup->rules()->max('order');
+        return (int) $ruleGroup->rules()->max('order');
     }
 
     /**
@@ -142,8 +144,8 @@ class RuleRepository implements RuleRepositoryInterface
                 continue;
             }
             $triggerType  = $trigger->trigger_type;
-            if (str_starts_with($trigger->trigger_type, '-')) {
-                $triggerType = substr($trigger->trigger_type, 1);
+            if (str_starts_with((string) $trigger->trigger_type, '-')) {
+                $triggerType = substr((string) $trigger->trigger_type, 1);
             }
             $needsContext = config(sprintf('search.operators.%s.needs_context', $triggerType)) ?? true;
             if (false === $needsContext) {
@@ -213,7 +215,7 @@ class RuleRepository implements RuleRepositoryInterface
     {
         $search = $this->user->rules();
         if ('' !== $query) {
-            $search->where('rules.title', 'LIKE', sprintf('%%%s%%', $query));
+            $search->whereLike('rules.title', sprintf('%%%s%%', $query));
         }
         $search->orderBy('rules.order', 'ASC')
             ->orderBy('rules.title', 'ASC')
@@ -238,6 +240,8 @@ class RuleRepository implements RuleRepositoryInterface
             throw new FireflyException('No such rule group.');
         }
 
+        /** @var RuleGroup $ruleGroup */
+
         // start by creating a new rule:
         $rule                  = new Rule();
         $rule->user()->associate($this->user);
@@ -258,9 +262,9 @@ class RuleRepository implements RuleRepositoryInterface
 
         // reset order:
         $this->resetRuleOrder($ruleGroup);
-        app('log')->debug('Done with resetting.');
+        Log::debug('Done with resetting.');
         if (array_key_exists('order', $data)) {
-            app('log')->debug(sprintf('User has submitted order %d', $data['order']));
+            Log::debug(sprintf('User has submitted order %d', $data['order']));
             $this->setOrder($rule, $data['order']);
         }
 
@@ -276,6 +280,7 @@ class RuleRepository implements RuleRepositoryInterface
 
     public function find(int $ruleId): ?Rule
     {
+        /** @var null|Rule */
         return $this->user->rules()->find($ruleId);
     }
 
@@ -308,20 +313,13 @@ class RuleRepository implements RuleRepositoryInterface
         return true;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     public function setOrder(Rule $rule, int $newOrder): void
     {
         $oldOrder    = $rule->order;
         $groupId     = $rule->rule_group_id;
         $maxOrder    = $this->maxOrder($rule->ruleGroup);
         $newOrder    = $newOrder > $maxOrder ? $maxOrder + 1 : $newOrder;
-        app('log')->debug(sprintf('New order will be %d', $newOrder));
+        Log::debug(sprintf('New order will be %d', $newOrder));
 
         if ($newOrder > $oldOrder) {
             $this->user->rules()
@@ -332,7 +330,7 @@ class RuleRepository implements RuleRepositoryInterface
                 ->decrement('rules.order')
             ;
             $rule->order = $newOrder;
-            app('log')->debug(sprintf('Order of rule #%d ("%s") is now %d', $rule->id, $rule->title, $newOrder));
+            Log::debug(sprintf('Order of rule #%d ("%s") is now %d', $rule->id, $rule->title, $newOrder));
             $rule->save();
 
             return;
@@ -346,13 +344,13 @@ class RuleRepository implements RuleRepositoryInterface
             ->increment('rules.order')
         ;
         $rule->order = $newOrder;
-        app('log')->debug(sprintf('Order of rule #%d ("%s") is now %d', $rule->id, $rule->title, $newOrder));
+        Log::debug(sprintf('Order of rule #%d ("%s") is now %d', $rule->id, $rule->title, $newOrder));
         $rule->save();
     }
 
     public function maxOrder(RuleGroup $ruleGroup): int
     {
-        return (int)$ruleGroup->rules()->max('order');
+        return (int) $ruleGroup->rules()->max('order');
     }
 
     private function storeTriggers(Rule $rule, array $data): void
@@ -363,7 +361,7 @@ class RuleRepository implements RuleRepositoryInterface
             $stopProcessing = $trigger['stop_processing'] ?? false;
             $active         = $trigger['active'] ?? true;
             $type           = $trigger['type'];
-            if (true === ($trigger['prohibited'] ?? false) && !str_starts_with($type, '-')) {
+            if (true === ($trigger['prohibited'] ?? false) && !str_starts_with((string) $type, '-')) {
                 $type = sprintf('-%s', $type);
             }
 
@@ -477,12 +475,15 @@ class RuleRepository implements RuleRepositoryInterface
         // update the order:
         $this->resetRuleOrder($group);
         if (array_key_exists('order', $data)) {
-            $this->moveRule($rule, $group, (int)$data['order']);
+            $this->moveRule($rule, $group, (int) $data['order']);
         }
 
         // update the triggers:
         if (array_key_exists('trigger', $data) && 'update-journal' === $data['trigger']) {
             $this->setRuleTrigger('update-journal', $rule);
+        }
+        if (array_key_exists('trigger', $data) && 'manual-activation' === $data['trigger']) {
+            $this->setRuleTrigger('manual-activation', $rule);
         }
         if (array_key_exists('trigger', $data) && 'store-journal' === $data['trigger']) {
             $this->setRuleTrigger('store-journal', $rule);

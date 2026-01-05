@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AttachmentStoreRequest.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -57,9 +58,7 @@ class StoreRequest extends FormRequest
     {
         $models = config('firefly.valid_attachment_models');
         $models = array_map(
-            static function (string $className) {
-                return str_replace('FireflyIII\Models\\', '', $className);
-            },
+            static fn (string $className): string => str_replace('FireflyIII\Models\\', '', $className),
             $models
         );
         $models = implode(',', $models);

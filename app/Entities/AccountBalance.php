@@ -1,4 +1,5 @@
 <?php
+
 /*
  * AccountBalance.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -27,15 +28,15 @@ use FireflyIII\Models\Account;
 
 class AccountBalance
 {
-    public string $id;
     public string $amount;
     public string $currencyId;
+    public string $id;
 
     public static function fromArray(): self
     {
         $balance             = new self();
         $balance->id         = (string) random_int(1, 1000);
-        $balance->name       = (string) random_int(1, 1000);
+        // $balance->name       = (string) random_int(1, 1000);
         $balance->amount     = (string) random_int(1, 1000);
         $balance->currencyId = '1';
 

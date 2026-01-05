@@ -25,14 +25,101 @@ declare(strict_types=1);
 namespace FireflyIII\Helpers\Collector\Extensions;
 
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
+use FireflyIII\Models\Account;
+use FireflyIII\Support\Facades\Steam;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Override;
 
 /**
  * Trait AccountCollection
  */
 trait AccountCollection
 {
+    #[Override]
+    public function accountBalanceIs(string $direction, string $operator, string $value): GroupCollectorInterface
+    {
+        Log::warning(sprintf('GroupCollector will be SLOW: accountBalanceIs: "%s" "%s" "%s"', $direction, $operator, $value));
+
+        /**
+         * @param array $object
+         *
+         * @return bool
+         */
+        $filter              = static function (array $object) use ($direction, $operator, $value): bool {
+            /** @var array $transaction */
+            foreach ($object['transactions'] as $transaction) {
+                $key       = sprintf('%s_account_id', $direction);
+                $accountId = $transaction[$key] ?? 0;
+                if (0 === $accountId) {
+                    return false;
+                }
+
+                // in theory, this could lead to finding other users accounts.
+                /** @var null|Account $account */
+                $account   = Account::find($accountId);
+                if (null === $account) {
+                    continue;
+                }
+
+                // 2025-10-08 replace with accountsBalancesOptimized
+                // the balance must be found BEFORE the transaction date.
+                // so inclusive = false
+                Log::debug(sprintf('accountBalanceIs: Call accountsBalancesOptimized with date/time "%s"', $transaction['date']->toIso8601String()));
+                $balance   = Steam::accountsBalancesOptimized(new Collection()->push($account), $transaction['date'], convertToPrimary: null, inclusive: false)[$account->id];
+                // $balance   = Steam::finalAccountBalance($account, $date);
+                $result    = bccomp((string) $balance['balance'], $value);
+                Log::debug(sprintf('"%s" vs "%s" is %d', $balance['balance'], $value, $result));
+
+                switch ($operator) {
+                    default:
+                        Log::error(sprintf('GroupCollector: accountBalanceIs: unknown operator "%s"', $operator));
+
+                        return false;
+
+                    case '==':
+                        Log::debug('Expect result to be 0 (equal)');
+
+                        return 0 === $result;
+
+                    case '!=':
+                        Log::debug('Expect result to be -1 or 1 (not equal)');
+
+                        return 0 !== $result;
+
+                    case '>':
+                        Log::debug('Expect result to be 1 (greater then)');
+
+                        return 1 === $result;
+
+                    case '>=':
+                        Log::debug('Expect result to be 0 or 1 (greater then or equal)');
+
+                        return -1 !== $result;
+
+                    case '<':
+                        Log::debug('Expect result to be -1 (less than)');
+
+                        return -1 === $result;
+
+                    case '<=':
+                        Log::debug('Expect result to be -1 or 0 (less than or equal)');
+
+                        return 1 !== $result;
+                }
+                // if($balance['balance'] $operator $value) {
+
+                // }
+            }
+
+            return false;
+        };
+        $this->postFilters[] = $filter;
+
+        return $this;
+    }
+
     /**
      * These accounts must not be included.
      */
@@ -43,7 +130,7 @@ trait AccountCollection
             $this->query->whereNotIn('source.account_id', $accountIds);
             $this->query->whereNotIn('destination.account_id', $accountIds);
 
-            app('log')->debug(sprintf('GroupCollector: excludeAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: excludeAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -58,7 +145,7 @@ trait AccountCollection
             $accountIds = $accounts->pluck('id')->toArray();
             $this->query->whereNotIn('destination.account_id', $accountIds);
 
-            app('log')->debug(sprintf('GroupCollector: excludeDestinationAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: excludeDestinationAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -73,7 +160,7 @@ trait AccountCollection
             $accountIds = $accounts->pluck('id')->toArray();
             $this->query->whereNotIn('source.account_id', $accountIds);
 
-            app('log')->debug(sprintf('GroupCollector: excludeSourceAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: excludeSourceAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -92,7 +179,7 @@ trait AccountCollection
                     $query->orWhereIn('destination.account_id', $accountIds);
                 }
             );
-            // app('log')->debug(sprintf('GroupCollector: setAccounts: %s', implode(', ', $accountIds)));
+            // Log::debug(sprintf('GroupCollector: setAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -111,7 +198,7 @@ trait AccountCollection
                     $query->whereIn('destination.account_id', $accountIds);
                 }
             );
-            app('log')->debug(sprintf('GroupCollector: setBothAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: setBothAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -126,7 +213,7 @@ trait AccountCollection
             $accountIds = $accounts->pluck('id')->toArray();
             $this->query->whereIn('destination.account_id', $accountIds);
 
-            app('log')->debug(sprintf('GroupCollector: setDestinationAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: setDestinationAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -145,7 +232,7 @@ trait AccountCollection
                     $query->whereNotIn('destination.account_id', $accountIds);
                 }
             );
-            // app('log')->debug(sprintf('GroupCollector: setAccounts: %s', implode(', ', $accountIds)));
+            // Log::debug(sprintf('GroupCollector: setAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -160,7 +247,7 @@ trait AccountCollection
             $accountIds = $accounts->pluck('id')->toArray();
             $this->query->whereIn('source.account_id', $accountIds);
 
-            app('log')->debug(sprintf('GroupCollector: setSourceAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: setSourceAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;
@@ -193,7 +280,7 @@ trait AccountCollection
                 }
             );
 
-            app('log')->debug(sprintf('GroupCollector: setXorAccounts: %s', implode(', ', $accountIds)));
+            Log::debug(sprintf('GroupCollector: setXorAccounts: %s', implode(', ', $accountIds)));
         }
 
         return $this;

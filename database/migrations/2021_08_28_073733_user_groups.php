@@ -42,6 +42,7 @@ class UserGroups extends Migration
             'categories',
             'recurrences',
             'object_groups',
+            'preferences',
             'rule_groups',
             'rules',
             'tags',
@@ -105,8 +106,8 @@ class UserGroups extends Migration
     /**
      * Run the migrations.
      *
-     * @SuppressWarnings(PHPMD.ShortMethodName)
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ShortMethodName")
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     public function up(): void
     {

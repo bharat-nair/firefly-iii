@@ -29,6 +29,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passport\Passport;
+use Override;
+
+use function Safe\preg_match;
 
 /**
  * Class AppServiceProvider
@@ -41,11 +44,12 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+        // Passport::$clientUuids = false;
         Response::macro('api', function (array $value) {
             $headers = [
                 'Cache-Control' => 'no-store',
             ];
-            $uuid    = (string)request()->header('X-Trace-Id');
+            $uuid    = (string) request()->header('X-Trace-Id');
             if ('' !== trim($uuid) && (1 === preg_match('/^[a-f\d]{8}(-[a-f\d]{4}){4}[a-f\d]{8}$/i', trim($uuid)))) {
                 $headers['X-Trace-Id'] = $uuid;
             }
@@ -57,15 +61,15 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // blade extension
-        Blade::directive('activeXRoutePartial', function (string $route) {
-            $name = \Route::getCurrentRoute()->getName() ?? '';
+        Blade::directive('activeXRoutePartial', function (string $route): string {
+            $name = Route::getCurrentRoute()->getName() ?? '';
             if (str_contains($name, $route)) {
                 return 'menu-open';
             }
 
             return '';
         });
-        Blade::if('partialroute', function (string $route, string $firstParam = '') {
+        Blade::if('partialroute', function (string $route, string $firstParam = ''): bool {
             $name       = Route::getCurrentRoute()->getName() ?? '';
             if ('' === $firstParam && str_contains($name, $route)) {
                 return true;
@@ -75,17 +79,15 @@ class AppServiceProvider extends ServiceProvider
             $params     = Route::getCurrentRoute()->parameters();
             $params ??= [];
             $objectType = $params['objectType'] ?? '';
-            if ($objectType === $firstParam && str_contains($name, $route)) {
-                return true;
-            }
 
-            return false;
+            return $objectType === $firstParam && str_contains($name, $route);
         });
     }
 
     /**
      * Register any application services.
      */
+    #[Override]
     public function register(): void
     {
         Passport::ignoreRoutes();

@@ -337,6 +337,13 @@ function updateTriggerInput(selectList) {
             console.log('Select list value is ' + selectList.val() + ', so input needs auto complete.');
             createAutoComplete(inputResult, 'api/v1/autocomplete/tags');
             break;
+        case 'bill_contains':
+        case 'bill_ends':
+        case 'bill_is':
+        case 'bill_starts':
+            console.log('Select list value is ' + selectList.val() + ', so input needs auto complete.');
+            createAutoComplete(inputResult, 'api/v1/autocomplete/bills');
+            break;
         case 'budget_is':
             console.log('Select list value is ' + selectList.val() + ', so input needs auto complete.');
             createAutoComplete(inputResult, 'api/v1/autocomplete/budgets');
@@ -357,6 +364,8 @@ function updateTriggerInput(selectList) {
             createAutoComplete(inputResult, 'api/v1/autocomplete/transactions');
             break;
         case 'has_no_category':
+        case 'no_external_id':
+        case 'any_external_id':
         case 'has_any_category':
         case 'has_no_budget':
         case 'has_any_budget':

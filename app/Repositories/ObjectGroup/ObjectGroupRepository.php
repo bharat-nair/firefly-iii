@@ -24,18 +24,20 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\ObjectGroup;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Models\PiggyBank;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class ObjectGroupRepository
  */
-class ObjectGroupRepository implements ObjectGroupRepositoryInterface
+class ObjectGroupRepository implements ObjectGroupRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     public function deleteAll(): void
     {
@@ -64,7 +66,7 @@ class ObjectGroupRepository implements ObjectGroupRepositoryInterface
 
         /** @var ObjectGroup $group */
         foreach ($all as $group) {
-            $count = \DB::table('object_groupables')->where('object_groupables.object_group_id', $group->id)->count();
+            $count = DB::table('object_groupables')->where('object_groupables.object_group_id', $group->id)->count();
             if (0 === $count) {
                 $group->delete();
             }
@@ -95,14 +97,14 @@ class ObjectGroupRepository implements ObjectGroupRepositoryInterface
 
     public function resetOrder(): void
     {
-        app('log')->debug('Now in resetOrder');
+        Log::debug('Now in resetOrder');
         $list  = $this->get();
         $index = 1;
 
         /** @var ObjectGroup $objectGroup */
         foreach ($list as $objectGroup) {
             if ($index !== $objectGroup->order) {
-                app('log')->debug(
+                Log::debug(
                     sprintf('objectGroup #%d ("%s"): order should %d be but is %d.', $objectGroup->id, $objectGroup->title, $index, $objectGroup->order)
                 );
                 $objectGroup->order = $index;
@@ -120,18 +122,11 @@ class ObjectGroupRepository implements ObjectGroupRepositoryInterface
             $parts = explode(' ', $query);
             foreach ($parts as $part) {
                 $search = sprintf('%%%s%%', $part);
-                $dbQuery->where('title', 'LIKE', $search);
+                $dbQuery->whereLike('title', $search);
             }
         }
 
         return $dbQuery->take($limit)->get(['object_groups.*']);
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 
     public function update(ObjectGroup $objectGroup, array $data): ObjectGroup
@@ -141,7 +136,7 @@ class ObjectGroupRepository implements ObjectGroupRepositoryInterface
         }
 
         if (array_key_exists('order', $data)) {
-            $this->setOrder($objectGroup, (int)$data['order']);
+            $this->setOrder($objectGroup, (int) $data['order']);
         }
 
         $objectGroup->save();
@@ -172,7 +167,7 @@ class ObjectGroupRepository implements ObjectGroupRepositoryInterface
             $objectGroup->save();
         }
 
-        app('log')->debug(sprintf('Objectgroup #%d order is now %d', $objectGroup->id, $newOrder));
+        Log::debug(sprintf('Objectgroup #%d order is now %d', $objectGroup->id, $newOrder));
 
         return $objectGroup;
     }

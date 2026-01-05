@@ -1,4 +1,5 @@
 <?php
+
 /*
  * Balance.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -25,7 +26,7 @@ namespace FireflyIII\Support;
 
 use Carbon\Carbon;
 use FireflyIII\Models\Transaction;
-use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Support\Facades\Amount;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -58,9 +59,9 @@ class Balance
 
         $result     = $query->get(['transactions.account_id', 'transactions.transaction_currency_id', 'transactions.balance_after']);
         foreach ($result as $entry) {
-            $accountId                       = (int) $entry->account_id;
-            $currencyId                      = (int) $entry->transaction_currency_id;
-            $currencies[$currencyId] ??= TransactionCurrency::find($currencyId);
+            $accountId                       = (int)$entry->account_id;
+            $currencyId                      = (int)$entry->transaction_currency_id;
+            $currencies[$currencyId] ??= Amount::getTransactionCurrencyById($currencyId);
             $return[$accountId]      ??= [];
             if (array_key_exists($currencyId, $return[$accountId])) {
                 continue;

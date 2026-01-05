@@ -6,6 +6,13 @@
         </a>
     </li>
 
+    <li class="{{ activeRouteStrict('search.index') }} visible-xs hidden-sm hidden-md hidden-lg">
+        <a href="{{ route('search.index') }}">
+            <em class="fa fa-search fa-fw"></em>
+            <span>{{ 'search'|_ }}</span>
+        </a>
+    </li>
+
     <li class="header text-uppercase">{{ 'financial_control'|_ }}</li>
 
     <li class="{{ activeRoutePartial('budgets') }}" id="budget-menu">
@@ -15,10 +22,10 @@
         </a>
     </li>
 
-    <li class="{{ activeRoutePartial('bills') }}">
-        <a href="{{ route('bills.index') }}">
+    <li class="{{ activeRoutePartial('subscriptions') }}">
+        <a href="{{ route('subscriptions.index') }}">
             <em class="fa fa-calendar-o fa-fw"></em>
-            <span>{{ 'bills'|_ }}</span>
+            <span>{{ 'subscriptions'|_ }}</span>
         </a>
     </li>
 
@@ -189,7 +196,7 @@
         </li>
     {% endif %}
 
-    <li class="{{ activeRoutePartial('admin') }} {{ activeRoutePartial('profile') }} {{ activeRoutePartial('preferences') }} {{ activeRoutePartial('currencies') }} treeview"
+    <li class="{{ activeRoutePartial('administrations') }} {{ activeRoutePartial('setting') }} {{ activeRoutePartial('profile') }} {{ activeRoutePartial('preferences') }} {{ activeRoutePartial('currencies') }} {{ activeRoutePartial('exchange-rates') }} treeview"
         id="option-menu">
         <a href="#">
             <em class="fa fa-sliders fa-fw"></em>
@@ -219,11 +226,25 @@
                     <span>{{ 'currencies'|_ }}</span>
                 </a>
             </li>
+            {% if config('cer.enabled') %}
+            <li class="{{ activeRoutePartial('exchange-rates') }}">
+                <a class="{{ activeRoutePartial('exchange-rates') }}" href="{{ route('exchange-rates.index') }}">
+                    <span class="fa fa-angle-right fa-fw"></span>
+                    <span>{{ 'menu_exchange_rates_index'|_ }}</span>
+                </a>
+            </li>
+            {% endif %}
+            <li class="{{ activeRoutePartial('administrations') }}">
+                <a class="{{ activeRoutePartial('administration') }}" href="{{ route('administrations.index') }}">
+                    <span class="fa fa-angle-right fa-fw"></span>
+                    <span>{{ 'administrations_index_menu'|_ }}</span>
+                </a>
+            </li>
             {% if hasRole('owner') %}
-                <li class="{{ activeRoutePartial('admin') }}">
-                    <a class="{{ activeRoutePartial('admin') }}" href="{{ route('admin.index') }}">
+                <li class="{{ activeRoutePartial('settings') }}">
+                    <a class="{{ activeRoutePartial('settings') }}" href="{{ route('settings.index') }}">
                         <span class="fa fa-angle-right fa-fw"></span>
-                        <span>{{ 'administration'|_ }}</span>
+                        <span>{{ 'system_settings'|_ }}</span>
                     </a>
                 </li>
             {% endif %}

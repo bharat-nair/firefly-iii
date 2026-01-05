@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Illuminate\Support\Facades\Log;
+use Closure;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
@@ -34,19 +36,14 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class IsDefaultUserGroupName implements ValidationRule
 {
-    private UserGroup $userGroup;
-
-    public function __construct(UserGroup $userGroup)
-    {
-        $this->userGroup = $userGroup;
-    }
+    public function __construct(private readonly UserGroup $userGroup) {}
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        app('log')->debug(sprintf('Now in %s(%s)', __METHOD__, $value));
+        Log::debug(sprintf('Now in %s(%s)', __METHOD__, $value));
 
         // are you owner of this group and the name is the same? fail.
         /** @var User $user */

@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\System;
 
+use Carbon\Carbon;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -57,6 +58,10 @@ class CronRequest extends FormRequest
         if ($this->has('date')) {
             $data['date'] = $this->getCarbonDate('date');
         }
+        // catch NULL.
+        if (!$data['date'] instanceof Carbon) {
+            $data['date'] = today(config('app.timezone'));
+        }
 
         return $data;
     }
@@ -68,7 +73,7 @@ class CronRequest extends FormRequest
     {
         return [
             'force' => 'in:true,false',
-            'date'  => 'date',
+            'date'  => 'nullable|date|after:1970-01-02|before:2038-01-17',
         ];
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ConvertToWithdrawal.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,27 +24,23 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 
 /**
  * Class SwitchAccounts
  */
 class SwitchAccounts implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -51,22 +48,22 @@ class SwitchAccounts implements ActionInterface
         /** @var null|TransactionJournal $object */
         $object                        = TransactionJournal::where('user_id', $journal['user_id'])->find($journal['transaction_journal_id']);
         if (null === $object) {
-            app('log')->error(sprintf('Cannot find journal #%d, cannot switch accounts.', $journal['transaction_journal_id']));
+            Log::error(sprintf('Cannot find journal #%d, cannot switch accounts.', $journal['transaction_journal_id']));
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.no_such_journal')));
 
             return false;
         }
         $groupCount                    = TransactionJournal::where('transaction_group_id', $journal['transaction_group_id'])->count();
         if ($groupCount > 1) {
-            app('log')->error(sprintf('Group #%d has more than one transaction in it, cannot switch accounts.', $journal['transaction_group_id']));
+            Log::error(sprintf('Group #%d has more than one transaction in it, cannot switch accounts.', $journal['transaction_group_id']));
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.split_group')));
 
             return false;
         }
 
         $type                          = $object->transactionType->type;
-        if (TransactionType::TRANSFER !== $type) {
-            app('log')->error(sprintf('Journal #%d is NOT a transfer (rule #%d), cannot switch accounts.', $journal['transaction_journal_id'], $this->action->rule_id));
+        if (TransactionTypeEnum::TRANSFER->value !== $type) {
+            Log::error(sprintf('Journal #%d is NOT a transfer (rule #%d), cannot switch accounts.', $journal['transaction_journal_id'], $this->action->rule_id));
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.is_not_transfer')));
 
             return false;
@@ -78,7 +75,7 @@ class SwitchAccounts implements ActionInterface
         /** @var null|Transaction $destTransaction */
         $destTransaction               = $object->transactions()->where('amount', '>', 0)->first();
         if (null === $sourceTransaction || null === $destTransaction) {
-            app('log')->error(sprintf('Journal #%d has no source or destination transaction (rule #%d), cannot switch accounts.', $journal['transaction_journal_id'], $this->action->rule_id));
+            Log::error(sprintf('Journal #%d has no source or destination transaction (rule #%d), cannot switch accounts.', $journal['transaction_journal_id'], $this->action->rule_id));
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.cannot_find_accounts')));
 
             return false;

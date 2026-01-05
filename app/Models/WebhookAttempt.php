@@ -1,4 +1,5 @@
 <?php
+
 /*
  * WebhookAttempt.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -31,9 +32,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperWebhookAttempt
- */
 class WebhookAttempt extends Model
 {
     use ReturnsIntegerIdTrait;
@@ -70,7 +68,7 @@ class WebhookAttempt extends Model
     protected function webhookMessageId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

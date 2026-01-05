@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Middleware;
 
+use Closure;
 use FireflyIII\Support\Domain;
 use Illuminate\Contracts\Auth\Factory as Auth;
 use Illuminate\Http\Request;
@@ -34,26 +35,19 @@ use Illuminate\Routing\Route;
 class Binder
 {
     /**
-     * The authentication factory instance.
-     *
-     * @var Auth
-     */
-    protected $auth;
-
-    /**
      * The binders.
-     *
-     * @var array
      */
-    protected $binders = [];
+    protected array $binders;
 
     /**
      * Binder constructor.
      */
-    public function __construct(Auth $auth)
-    {
+    public function __construct(/**
+     * The authentication factory instance.
+     */
+        protected Auth $auth
+    ) {
         $this->binders = Domain::getBindables();
-        $this->auth    = $auth;
     }
 
     /**
@@ -63,7 +57,7 @@ class Binder
      *
      * @return mixed
      */
-    public function handle($request, \Closure $next)
+    public function handle($request, Closure $next)
     {
         foreach ($request->route()->parameters() as $key => $value) {
             if (array_key_exists($key, $this->binders)) {

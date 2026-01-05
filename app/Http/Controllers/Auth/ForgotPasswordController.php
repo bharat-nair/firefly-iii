@@ -33,6 +33,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
+use Safe\Exceptions\UrlException;
+
+use function Safe\parse_url;
 
 /**
  * Class ForgotPasswordController
@@ -58,15 +63,17 @@ class ForgotPasswordController extends Controller
      * Send a reset link to the given user.
      *
      * @return Factory|RedirectResponse|View
+     *
+     * @throws FireflyException
      */
     public function sendResetLinkEmail(Request $request, UserRepositoryInterface $repository)
     {
-        app('log')->info('Start of sendResetLinkEmail()');
-        if ('web' !== config('firefly.authentication_guard')) {
+        Log::info('Start of sendResetLinkEmail()');
+        if ('web'   !== config('firefly.authentication_guard')) {
             $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
-            app('log')->error($message);
+            Log::error($message);
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
 
         // validate host header.
@@ -79,7 +86,7 @@ class ForgotPasswordController extends Controller
         $user     = User::where('email', $request->get('email'))->first();
 
         if (null !== $user && $repository->hasRole($user, 'demo')) {
-            return back()->withErrors(['email' => (string)trans('firefly.cannot_reset_demo_user')]);
+            return back()->withErrors(['email' => (string) trans('firefly.cannot_reset_demo_user')]);
         }
 
         // We will send the password reset link to this user. Once we have attempted
@@ -87,7 +94,7 @@ class ForgotPasswordController extends Controller
         // need to show to the user. Finally, we'll send out a proper response.
         $result   = $this->broker()->sendResetLink($request->only('email'));
         if ('passwords.throttled' === $result) {
-            app('log')->error(sprintf('Cowardly refuse to send a password reset message to user #%d because the reset button has been throttled.', $user->id));
+            Log::error(sprintf('Cowardly refuse to send a password reset message to user #%d because the reset button has been throttled.', $user->id));
         }
 
         // always send the same response to the user:
@@ -101,11 +108,15 @@ class ForgotPasswordController extends Controller
      */
     private function validateHost(): void
     {
-        $configuredHost = parse_url((string)config('app.url'), PHP_URL_HOST);
-        if (false === $configuredHost || null === $configuredHost) {
+        try {
+            $configuredHost = parse_url((string)config('app.url'), PHP_URL_HOST);
+        } catch (UrlException $e) {
+            throw new FireflyException('Please set a valid and correct Firefly III URL in the APP_URL environment variable.', 0, $e);
+        }
+        if (!is_string($configuredHost)) {
             throw new FireflyException('Please set a valid and correct Firefly III URL in the APP_URL environment variable.');
         }
-        $host           = request()->host();
+        $host = request()->host();
         if ($configuredHost !== $host) {
             Log::error(sprintf('Host header is "%s", APP_URL is "%s".', $host, $configuredHost));
 
@@ -119,24 +130,26 @@ class ForgotPasswordController extends Controller
      * @return Factory|View
      *
      * @throws FireflyException
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
      */
     public function showLinkRequestForm()
     {
         if ('web' !== config('firefly.authentication_guard')) {
             $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
 
-            return view('error', compact('message'));
+            return view('errors.error', ['message' => $message]);
         }
 
         // is allowed to?
         $singleUserMode    = app('fireflyconfig')->get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
         $userCount         = User::count();
         $allowRegistration = true;
-        $pageTitle         = (string)trans('firefly.forgot_pw_page_title');
+        $pageTitle         = (string) trans('firefly.forgot_pw_page_title');
         if (true === $singleUserMode && $userCount > 0) {
             $allowRegistration = false;
         }
 
-        return view('auth.passwords.email')->with(compact('allowRegistration', 'pageTitle'));
+        return view('auth.passwords.email')->with(['allowRegistration' => $allowRegistration, 'pageTitle' => $pageTitle]);
     }
 }

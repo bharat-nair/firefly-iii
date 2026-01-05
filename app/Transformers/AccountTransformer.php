@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AccountTransformer.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -26,14 +27,17 @@ namespace FireflyIII\Transformers;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use Symfony\Component\HttpFoundation\ParameterBag;
+use FireflyIII\Support\Facades\Amount;
 
 /**
  * Class AccountTransformer
  */
 class AccountTransformer extends AbstractTransformer
 {
+    protected bool                       $convertToPrimary;
+    protected TransactionCurrency        $primary;
     protected AccountRepositoryInterface $repository;
 
     /**
@@ -41,8 +45,9 @@ class AccountTransformer extends AbstractTransformer
      */
     public function __construct()
     {
-        $this->parameters = new ParameterBag();
-        $this->repository = app(AccountRepositoryInterface::class);
+        $this->repository       = app(AccountRepositoryInterface::class);
+        $this->convertToPrimary = Amount::convertToPrimary();
+        $this->primary          = Amount::getPrimaryCurrency();
     }
 
     /**
@@ -52,80 +57,108 @@ class AccountTransformer extends AbstractTransformer
      */
     public function transform(Account $account): array
     {
-        $this->repository->setUser($account->user);
+        if (null === $account->meta) {
+            $account->meta = [
+                'currency' => null,
+            ];
+        }
 
         // get account type:
-        $fullType                                                     = $account->accountType->type;
-        $accountType                                                  = (string)config(sprintf('firefly.shortNamesByFullName.%s', $fullType));
-        $liabilityType                                                = (string)config(sprintf('firefly.shortLiabilityNameByFullName.%s', $fullType));
-        $liabilityType                                                = '' === $liabilityType ? null : strtolower($liabilityType);
-        $liabilityDirection                                           = $this->repository->getMetaValue($account, 'liability_direction');
+        $accountType                           = (string)config(sprintf('firefly.shortNamesByFullName.%s', $account->full_account_type));
+        $liabilityType                         = (string)config(sprintf('firefly.shortLiabilityNameByFullName.%s', $account->full_account_type));
+        $liabilityType                         = '' === $liabilityType ? null : strtolower($liabilityType);
+        $liabilityDirection                    = $account->meta['liability_direction'] ?? null;
+        $accountRole                           = $this->getAccountRole($account, $accountType);
+        $hasCurrencySettings                   = null !== $account->meta['currency'];
+        $includeNetWorth                       = 1 === (int)($account->meta['include_net_worth'] ?? 0);
+        $longitude                             = $account->meta['location']['longitude'] ?? null;
+        $latitude                              = $account->meta['location']['latitude'] ?? null;
+        $zoomLevel                             = $account->meta['location']['zoom_level'] ?? null;
+        $order                                 = $account->order;
 
-        // get account role (will only work if the type is asset.
-        $accountRole                                                  = $this->getAccountRole($account, $accountType);
-        $date                                                         = $this->getDate();
-        $date->endOfDay();
-
-        [$currencyId, $currencyCode, $currencySymbol, $decimalPlaces] = $this->getCurrency($account);
-        [$creditCardType, $monthlyPaymentDate]                        = $this->getCCInfo($account, $accountRole, $accountType);
-        [$openingBalance, $openingBalanceDate]                        = $this->getOpeningBalance($account, $accountType);
-        [$interest, $interestPeriod]                                  = $this->getInterest($account, $accountType);
-
-        $openingBalance                                               = app('steam')->bcround($openingBalance, $decimalPlaces);
-        $includeNetWorth                                              = '0' !== $this->repository->getMetaValue($account, 'include_net_worth');
-        $longitude                                                    = null;
-        $latitude                                                     = null;
-        $zoomLevel                                                    = null;
-        $location                                                     = $this->repository->getLocation($account);
-        if (null !== $location) {
-            $longitude = $location->longitude;
-            $latitude  = $location->latitude;
-            $zoomLevel = (int)$location->zoom_level;
+        // get primary currency as fallback:
+        $currency                              = $this->primary; // assume primary currency
+        if ($hasCurrencySettings) {
+            $currency = $account->meta['currency'];
         }
 
         // no order for some accounts:
-        $order                                                        = $account->order;
         if (!in_array(strtolower($accountType), ['liability', 'liabilities', 'asset'], true)) {
             $order = null;
         }
 
+        // get some listed information from the account meta-data:
+        [$creditCardType, $monthlyPaymentDate] = $this->getCCInfo($account, $accountRole, $accountType);
+        $openingBalanceDate                    = $this->getOpeningBalance($account, $accountType);
+        [$interest, $interestPeriod]           = $this->getInterest($account, $accountType);
+
         return [
-            'id'                      => (string)$account->id,
-            'created_at'              => $account->created_at->toAtomString(),
-            'updated_at'              => $account->updated_at->toAtomString(),
-            'active'                  => $account->active,
-            'order'                   => $order,
-            'name'                    => $account->name,
-            'type'                    => strtolower($accountType),
-            'account_role'            => $accountRole,
-            'currency_id'             => $currencyId,
-            'currency_code'           => $currencyCode,
-            'currency_symbol'         => $currencySymbol,
-            'currency_decimal_places' => $decimalPlaces,
-            'current_balance'         => app('steam')->bcround(app('steam')->balance($account, $date), $decimalPlaces),
-            'current_balance_date'    => $date->toAtomString(),
-            'notes'                   => $this->repository->getNoteText($account),
-            'monthly_payment_date'    => $monthlyPaymentDate,
-            'credit_card_type'        => $creditCardType,
-            'account_number'          => $this->repository->getMetaValue($account, 'account_number'),
-            'iban'                    => '' === $account->iban ? null : $account->iban,
-            'bic'                     => $this->repository->getMetaValue($account, 'BIC'),
-            'virtual_balance'         => app('steam')->bcround($account->virtual_balance, $decimalPlaces),
-            'opening_balance'         => $openingBalance,
-            'opening_balance_date'    => $openingBalanceDate,
-            'liability_type'          => $liabilityType,
-            'liability_direction'     => $liabilityDirection,
-            'interest'                => $interest,
-            'interest_period'         => $interestPeriod,
-            'current_debt'            => $this->repository->getMetaValue($account, 'current_debt'),
-            'include_net_worth'       => $includeNetWorth,
-            'longitude'               => $longitude,
-            'latitude'                => $latitude,
-            'zoom_level'              => $zoomLevel,
-            'links'                   => [
+            'id'                              => (string)$account->id,
+            'created_at'                      => $account->created_at->toAtomString(),
+            'updated_at'                      => $account->updated_at->toAtomString(),
+            'active'                          => $account->active,
+            'order'                           => $order,
+            'name'                            => $account->name,
+            'type'                            => strtolower($accountType),
+            'account_role'                    => $accountRole,
+
+            'object_group_id'                 => $account->meta['object_group_id'],
+            'object_group_order'              => $account->meta['object_group_order'],
+            'object_group_title'              => $account->meta['object_group_title'],
+
+            // currency information, structured for 6.3.0.
+            'object_has_currency_setting'     => $hasCurrencySettings,
+
+            // currency is object specific or primary, already determined above.
+            'currency_id'                     => (string)$currency['id'],
+            'currency_name'                   => $currency['name'],
+            'currency_code'                   => $currency['code'],
+            'currency_symbol'                 => $currency['symbol'],
+            'currency_decimal_places'         => $currency['decimal_places'],
+
+            'primary_currency_id'             => (string)$this->primary->id,
+            'primary_currency_name'           => $this->primary->name,
+            'primary_currency_code'           => $this->primary->code,
+            'primary_currency_symbol'         => $this->primary->symbol,
+            'primary_currency_decimal_places' => $this->primary->decimal_places,
+
+            // balances, structured for 6.3.0.
+            'current_balance'                 => $account->meta['balances']['current_balance'],
+            'pc_current_balance'              => $account->meta['balances']['pc_current_balance'],
+
+            'opening_balance'                 => $account->meta['balances']['opening_balance'],
+            'pc_opening_balance'              => $account->meta['balances']['pc_opening_balance'],
+
+            'virtual_balance'                 => $account->meta['balances']['virtual_balance'],
+            'pc_virtual_balance'              => $account->meta['balances']['pc_virtual_balance'],
+
+            'debt_amount'                     => $account->meta['balances']['debt_amount'],
+            'pc_debt_amount'                  => $account->meta['balances']['pc_debt_amount'],
+
+            'balance_difference'              => $account->meta['balances']['balance_difference'],
+            'pc_balance_difference'           => $account->meta['balances']['pc_balance_difference'],
+
+            'current_balance_date'            => $account->meta['current_balance_date']->toAtomString(),
+            'notes'                           => $account->meta['notes'] ?? null,
+            'monthly_payment_date'            => $monthlyPaymentDate,
+            'credit_card_type'                => $creditCardType,
+            'account_number'                  => $account->meta['account_number'],
+            'iban'                            => '' === $account->iban ? null : $account->iban,
+            'bic'                             => $account->meta['BIC'] ?? null,
+            'opening_balance_date'            => $openingBalanceDate,
+            'liability_type'                  => $liabilityType,
+            'liability_direction'             => $liabilityDirection,
+            'interest'                        => $interest,
+            'interest_period'                 => $interestPeriod,
+            'include_net_worth'               => $includeNetWorth,
+            'longitude'                       => $longitude,
+            'latitude'                        => $latitude,
+            'zoom_level'                      => $zoomLevel,
+            'last_activity'                   => $account->meta['last_activity']?->toAtomString(),
+            'links'                           => [
                 [
                     'rel' => 'self',
-                    'uri' => '/accounts/'.$account->id,
+                    'uri' => sprintf('/accounts/%d', $account->id),
                 ],
             ],
         ];
@@ -133,44 +166,12 @@ class AccountTransformer extends AbstractTransformer
 
     private function getAccountRole(Account $account, string $accountType): ?string
     {
-        $accountRole = $this->repository->getMetaValue($account, 'account_role');
+        $accountRole = $account->meta['account_role'] ?? null;
         if ('asset' !== $accountType || '' === (string)$accountRole) {
-            $accountRole = null;
+            return null;
         }
 
         return $accountRole;
-    }
-
-    /**
-     * TODO duplicated in the V2 transformer.
-     */
-    private function getDate(): Carbon
-    {
-        $date = today(config('app.timezone'));
-        if (null !== $this->parameters->get('date')) {
-            $date = $this->parameters->get('date');
-        }
-
-        return $date;
-    }
-
-    /**
-     * @throws FireflyException
-     */
-    private function getCurrency(Account $account): array
-    {
-        $currency       = $this->repository->getAccountCurrency($account);
-
-        // only grab default when result is null:
-        if (null === $currency) {
-            $currency = app('amount')->getDefaultCurrencyByUserGroup($account->user->userGroup);
-        }
-        $currencyId     = (string)$currency->id;
-        $currencyCode   = $currency->code;
-        $decimalPlaces  = $currency->decimal_places;
-        $currencySymbol = $currency->symbol;
-
-        return [$currencyId, $currencyCode, $currencySymbol, $decimalPlaces];
     }
 
     private function getCCInfo(Account $account, ?string $accountRole, string $accountType): array
@@ -178,19 +179,19 @@ class AccountTransformer extends AbstractTransformer
         $monthlyPaymentDate = null;
         $creditCardType     = null;
         if ('ccAsset' === $accountRole && 'asset' === $accountType) {
-            $creditCardType     = $this->repository->getMetaValue($account, 'cc_type');
-            $monthlyPaymentDate = $this->repository->getMetaValue($account, 'cc_monthly_payment_date');
+            $creditCardType     = $account->meta['cc_type'] ?? null;
+            $monthlyPaymentDate = $account->meta['cc_monthly_payment_date'] ?? null;
         }
         if (null !== $monthlyPaymentDate) {
             // try classic date:
             if (10 === strlen($monthlyPaymentDate)) {
                 $object             = Carbon::createFromFormat('!Y-m-d', $monthlyPaymentDate, config('app.timezone'));
-                if (null === $object) {
+                if (!$object instanceof Carbon) {
                     $object = today(config('app.timezone'));
                 }
                 $monthlyPaymentDate = $object->toAtomString();
             }
-            if (10 !== strlen($monthlyPaymentDate)) {
+            if (10 !== strlen((string)$monthlyPaymentDate)) {
                 $monthlyPaymentDate = Carbon::parse($monthlyPaymentDate, config('app.timezone'))->toAtomString();
             }
         }
@@ -198,27 +199,22 @@ class AccountTransformer extends AbstractTransformer
         return [$creditCardType, $monthlyPaymentDate];
     }
 
-    /**
-     * TODO refactor call to get~OpeningBalanceAmount / Date because it is a lot of queries
-     */
-    private function getOpeningBalance(Account $account, string $accountType): array
+    private function getOpeningBalance(Account $account, string $accountType): ?string
     {
-        $openingBalance     = null;
         $openingBalanceDate = null;
         if (in_array($accountType, ['asset', 'liabilities'], true)) {
-            $amount             = $this->repository->getOpeningBalanceAmount($account);
-            $openingBalance     = $amount;
-            $openingBalanceDate = $this->repository->getOpeningBalanceDate($account);
+            $openingBalanceDate = $account->meta['opening_balance_date'] ?? null;
         }
         if (null !== $openingBalanceDate) {
             $object             = Carbon::createFromFormat('Y-m-d H:i:s', $openingBalanceDate, config('app.timezone'));
-            if (null === $object) {
+            if (!$object instanceof Carbon) {
                 $object = today(config('app.timezone'));
             }
             $openingBalanceDate = $object->toAtomString();
+
         }
 
-        return [$openingBalance, $openingBalanceDate];
+        return $openingBalanceDate;
     }
 
     private function getInterest(Account $account, string $accountType): array
@@ -226,8 +222,8 @@ class AccountTransformer extends AbstractTransformer
         $interest       = null;
         $interestPeriod = null;
         if ('liabilities' === $accountType) {
-            $interest       = $this->repository->getMetaValue($account, 'interest');
-            $interestPeriod = $this->repository->getMetaValue($account, 'interest_period');
+            $interest       = $account->meta['interest'] ?? null;
+            $interestPeriod = $account->meta['interest_period'] ?? null;
         }
 
         return [$interest, $interestPeriod];

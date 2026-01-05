@@ -1,4 +1,5 @@
 <?php
+
 /**
  * BillController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,12 +24,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Report\ReportHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Support\CacheProperties;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Class BillController
@@ -56,10 +59,10 @@ class BillController extends Controller
         $report = $helper->getBillReport($accounts, $start, $end);
 
         try {
-            $result = view('reports.partials.bills', compact('report'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budgets: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $result = view('reports.partials.bills', ['report' => $report])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budgets: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = 'Could not render view.';
 
             throw new FireflyException($result, 0, $e);

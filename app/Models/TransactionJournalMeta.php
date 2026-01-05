@@ -29,55 +29,45 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @mixin IdeHelperTransactionJournalMeta
- */
+use function Safe\json_decode;
+use function Safe\json_encode;
+
 class TransactionJournalMeta extends Model
 {
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-        ];
-
     protected $fillable = ['transaction_journal_id', 'name', 'data', 'hash'];
 
-    /** @var string The table to store the data in */
     protected $table    = 'journal_meta';
-
-    /**
-     * @param mixed $value
-     *
-     * @return mixed
-     */
-    public function getDataAttribute($value)
-    {
-        return json_decode($value, false);
-    }
-
-    /**
-     * @param mixed $value
-     */
-    public function setDataAttribute($value): void
-    {
-        $data                     = json_encode($value);
-        $this->attributes['data'] = $data;
-        $this->attributes['hash'] = hash('sha256', (string)$data);
-    }
 
     public function transactionJournal(): BelongsTo
     {
         return $this->belongsTo(TransactionJournal::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+        ];
+    }
+
+    protected function data(): Attribute
+    {
+        return Attribute::make(get: fn ($value): mixed => json_decode((string)$value, false), set: function ($value): array {
+            $data = json_encode($value);
+
+            return ['data' => $data, 'hash' => hash('sha256', $data)];
+        });
+    }
+
     protected function transactionJournalId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

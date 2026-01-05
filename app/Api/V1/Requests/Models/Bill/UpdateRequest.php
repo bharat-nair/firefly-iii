@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Bill;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Models\Bill;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsValidPositiveAmount;
@@ -31,7 +32,6 @@ use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class UpdateRequest
@@ -81,9 +81,9 @@ class UpdateRequest extends FormRequest
             'amount_max'     => ['nullable', new IsValidPositiveAmount()],
             'currency_id'    => 'numeric|exists:transaction_currencies,id',
             'currency_code'  => 'min:3|max:51|exists:transaction_currencies,code',
-            'date'           => 'date',
-            'end_date'       => 'date|after:date',
-            'extension_date' => 'date|after:date',
+            'date'           => 'date|after:1970-01-02|before:2038-01-17',
+            'end_date'       => 'date|after:date|after:1970-01-02|before:2038-01-17',
+            'extension_date' => 'date|after:date|after:1970-01-02|before:2038-01-17',
             'repeat_freq'    => 'in:weekly,monthly,quarterly,half-year,yearly',
             'skip'           => 'min:0|max:31|numeric',
             'active'         => [new IsBoolean()],
@@ -104,13 +104,13 @@ class UpdateRequest extends FormRequest
                     $max = $data['amount_max'] ?? '0';
 
                     if (1 === bccomp($min, $max)) {
-                        $validator->errors()->add('amount_min', (string)trans('validation.amount_min_over_max'));
+                        $validator->errors()->add('amount_min', (string) trans('validation.amount_min_over_max'));
                     }
                 }
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RecurrenceTransactionMeta.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -29,26 +30,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @mixin IdeHelperRecurrenceTransactionMeta
- */
 class RecurrenceTransactionMeta extends Model
 {
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'name'       => 'string',
-            'value'      => 'string',
-        ];
-
     protected $fillable = ['rt_id', 'name', 'value'];
 
-    /** @var string The table to store the data in */
     protected $table    = 'rt_meta';
 
     public function recurrenceTransaction(): BelongsTo
@@ -56,10 +44,21 @@ class RecurrenceTransactionMeta extends Model
         return $this->belongsTo(RecurrenceTransaction::class, 'rt_id');
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+            'name'       => 'string',
+            'value'      => 'string',
+        ];
+    }
+
     protected function rtId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

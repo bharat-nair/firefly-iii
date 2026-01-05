@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RuleForm.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -51,9 +52,6 @@ class RuleForm
         return $this->select($name, $array, $value, $options);
     }
 
-    /**
-     * @param null $value
-     */
     public function ruleGroupListWithEmpty(string $name, $value = null, ?array $options = null): string
     {
         $options ??= [];

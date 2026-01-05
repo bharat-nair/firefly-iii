@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ExecutionController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,14 +25,17 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers\RuleGroup;
 
 use Carbon\Carbon;
+use Exception;
+use FireflyIII\Events\Model\TransactionGroup\TriggeredStoredTransactionGroup;
+use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\SelectTransactionsRequest;
 use FireflyIII\Models\RuleGroup;
-use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
-use FireflyIII\TransactionRules\Engine\RuleEngineInterface;
-use FireflyIII\User;
+use FireflyIII\Models\TransactionGroup;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 /**
@@ -39,7 +43,7 @@ use Illuminate\View\View;
  */
 class ExecutionController extends Controller
 {
-    private RuleGroupRepositoryInterface $ruleGroupRepository;
+    private readonly AccountRepositoryInterface $repository;
 
     /**
      * ExecutionController constructor.
@@ -47,13 +51,12 @@ class ExecutionController extends Controller
     public function __construct()
     {
         parent::__construct();
-
+        $this->repository = app(AccountRepositoryInterface::class);
         $this->middleware(
             function ($request, $next) {
                 app('view')->share('title', (string)trans('firefly.rules'));
                 app('view')->share('mainTitleIcon', 'fa-random');
-
-                $this->ruleGroupRepository = app(RuleGroupRepositoryInterface::class);
+                $this->repository->setUser(auth()->user());
 
                 return $next($request);
             }
@@ -63,29 +66,39 @@ class ExecutionController extends Controller
     /**
      * Execute the given rulegroup on a set of existing transactions.
      *
-     * @throws \Exception
+     * @throws Exception
      */
     public function execute(SelectTransactionsRequest $request, RuleGroup $ruleGroup): RedirectResponse
     {
         // Get parameters specified by the user
-        /** @var User $user */
-        $user          = auth()->user();
-        $accounts      = implode(',', $request->get('accounts'));
-        $startDate     = new Carbon($request->get('start'));
-        $endDate       = new Carbon($request->get('end'));
-        $rules         = $this->ruleGroupRepository->getActiveRules($ruleGroup);
-        // create new rule engine:
-        $newRuleEngine = app(RuleEngineInterface::class);
-        $newRuleEngine->setUser($user);
+        $accounts  = $request->get('accounts');
+        $set       = $this->repository->getAccountsById($accounts);
 
-        // add extra operators:
-        $newRuleEngine->addOperator(['type' => 'date_after', 'value' => $startDate->format('Y-m-d')]);
-        $newRuleEngine->addOperator(['type' => 'date_before', 'value' => $endDate->format('Y-m-d')]);
-        $newRuleEngine->addOperator(['type' => 'account_id', 'value' => $accounts]);
+        /** @var GroupCollectorInterface $collector */
+        $collector = app(GroupCollectorInterface::class);
+        $collector->setAccounts($set);
+        // add date operators.
+        if (null !== $request->get('start')) {
+            $startDate = new Carbon($request->get('start'));
+            $collector->setStart($startDate);
+        }
+        if (null !== $request->get('end')) {
+            $endDate = new Carbon($request->get('end'));
+            $collector->setEnd($endDate);
+        }
+        $final     = $collector->getGroups();
+        $ids       = $final->pluck('id')->toArray();
+        Log::debug(sprintf('Found %d groups collected from %d account(s)', $final->count(), $set->count()));
+        foreach (array_chunk($ids, 1337) as $setOfIds) {
+            Log::debug(sprintf('Now processing %d groups', count($setOfIds)));
+            $groups = TransactionGroup::whereIn('id', $setOfIds)->get();
 
-        // set rules:
-        $newRuleEngine->setRules($rules);
-        $newRuleEngine->fire();
+            /** @var TransactionGroup $group */
+            foreach ($groups as $group) {
+                Log::debug(sprintf('Processing group #%d.', $group->id));
+                event(new TriggeredStoredTransactionGroup($group));
+            }
+        }
 
         // Tell the user that the job is queued
         session()->flash('success', (string)trans('firefly.applied_rule_group_selection', ['title' => $ruleGroup->title]));
@@ -98,12 +111,10 @@ class ExecutionController extends Controller
      *
      * @return Factory|View
      */
-    public function selectTransactions(RuleGroup $ruleGroup)
+    public function selectTransactions(RuleGroup $ruleGroup): Factory|\Illuminate\Contracts\View\View
     {
-        $first    = session('first')->format('Y-m-d');
-        $today    = today(config('app.timezone'))->format('Y-m-d');
         $subTitle = (string)trans('firefly.apply_rule_group_selection', ['title' => $ruleGroup->title]);
 
-        return view('rules.rule-group.select-transactions', compact('first', 'today', 'ruleGroup', 'subTitle'));
+        return view('rules.rule-group.select-transactions', ['ruleGroup' => $ruleGroup, 'subTitle' => $subTitle]);
     }
 }

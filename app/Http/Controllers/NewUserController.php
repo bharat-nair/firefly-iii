@@ -23,11 +23,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
-use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Http\Requests\NewUserFormRequest;
-use FireflyIII\Models\AccountType;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Support\Http\Controllers\CreateStuff;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
@@ -64,9 +65,9 @@ class NewUserController extends Controller
      *
      * @return Factory|Redirector|RedirectResponse|View
      */
-    public function index()
+    public function index(): Factory|\Illuminate\Contracts\View\View|Redirector|RedirectResponse
     {
-        app('view')->share('title', (string)trans('firefly.welcome'));
+        app('view')->share('title', (string) trans('firefly.welcome'));
         app('view')->share('mainTitleIcon', 'fa-fire');
 
         $types     = config('firefly.accountTypesByIdentifier.asset');
@@ -78,17 +79,13 @@ class NewUserController extends Controller
             return redirect(route('index'));
         }
 
-        return view('new-user.index', compact('languages'));
+        return view('new-user.index', ['languages' => $languages]);
     }
 
     /**
      * Store his new settings.
-     *
-     * @return Redirector|RedirectResponse
-     *
-     * @throws FireflyException
      */
-    public function submit(NewUserFormRequest $request, CurrencyRepositoryInterface $currencyRepository)
+    public function submit(NewUserFormRequest $request, CurrencyRepositoryInterface $currencyRepository): Redirector|RedirectResponse
     {
         $language      = $request->convertString('language');
         if (!array_key_exists($language, config('firefly.languages'))) {
@@ -96,12 +93,12 @@ class NewUserController extends Controller
         }
 
         // set language preference:
-        app('preferences')->set('language', $language);
+        Preferences::set('language', $language);
         // Store currency preference from input:
-        $currency      = $currencyRepository->find((int)$request->input('amount_currency_id_bank_balance'));
+        $currency      = $currencyRepository->find((int) $request->input('amount_currency_id_bank_balance'));
 
         // if is null, set to EUR:
-        if (null === $currency) {
+        if (!$currency instanceof TransactionCurrency) {
             $currency = $currencyRepository->findByCode('EUR');
         }
         $currencyRepository->enable($currency);
@@ -111,14 +108,14 @@ class NewUserController extends Controller
         $this->createCashWalletAccount($currency, $language);        // create cash wallet account
 
         // store currency preference:
-        $currencyRepository->makeDefault($currency);
+        $currencyRepository->makePrimary($currency);
 
         // store frontpage preferences:
-        $accounts      = $this->repository->getAccountsByType([AccountType::ASSET])->pluck('id')->toArray();
-        app('preferences')->set('frontpageAccounts', $accounts);
+        $accounts      = $this->repository->getAccountsByType([AccountTypeEnum::ASSET->value])->pluck('id')->toArray();
+        Preferences::set('frontpageAccounts', $accounts);
 
         // mark.
-        app('preferences')->mark();
+        Preferences::mark();
 
         // set default optional fields:
         $visibleFields = [
@@ -132,10 +129,10 @@ class NewUserController extends Controller
             'notes'              => true,
             'attachments'        => true,
         ];
-        app('preferences')->set('transaction_journal_optional_fields', $visibleFields);
+        Preferences::set('transaction_journal_optional_fields', $visibleFields);
 
-        session()->flash('success', (string)trans('firefly.stored_new_accounts_new_user'));
-        app('preferences')->mark();
+        session()->flash('success', (string) trans('firefly.stored_new_accounts_new_user'));
+        Preferences::mark();
 
         return redirect(route('index'));
     }

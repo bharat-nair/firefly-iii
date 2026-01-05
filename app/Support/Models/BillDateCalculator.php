@@ -1,4 +1,5 @@
 <?php
+
 /*
  * BillDateCalculator.php
  * Copyright (c) 2023 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Models;
 
+use FireflyIII\Support\Facades\Navigation;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -36,7 +38,7 @@ class BillDateCalculator
     /**
      * Returns the dates a bill needs to be paid.
      *
-     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
+     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     public function getPayDates(Carbon $earliest, Carbon $latest, Carbon $billStart, string $period, int $skip, ?Carbon $lastPaid): array
     {
@@ -48,7 +50,7 @@ class BillDateCalculator
         Log::debug(sprintf('Dates must be between %s and %s.', $earliest->format('Y-m-d'), $latest->format('Y-m-d')));
         Log::debug(sprintf('Bill started on %s, period is "%s", skip is %d, last paid = "%s".', $billStart->format('Y-m-d'), $period, $skip, $lastPaid?->format('Y-m-d')));
 
-        $daysUntilEOM       = app('navigation')->daysUntilEndOfMonth($billStart);
+        $daysUntilEOM       = Navigation::daysUntilEndOfMonth($billStart);
         Log::debug(sprintf('For bill start, days until end of month is %d', $daysUntilEOM));
 
         $set                = new Collection();
@@ -82,7 +84,7 @@ class BillDateCalculator
             // AND date is after last paid date
             if (
                 $nextExpectedMatch->gte($earliest) // date is after "earliest possible date"
-                && (null === $lastPaid || $nextExpectedMatch->gt($lastPaid)) // date is after last paid date, if that date is not NULL
+                && (!$lastPaid instanceof Carbon || $nextExpectedMatch->gt($lastPaid)) // date is after last paid date, if that date is not NULL
             ) {
                 Log::debug('Add date to set, because it is after earliest possible date and after last paid date.');
                 $set->push(clone $nextExpectedMatch);
@@ -93,11 +95,11 @@ class BillDateCalculator
             // the next expected month because that month has only 28 days (i.e. february).
             // this applies to leap years as well.
             if ($daysUntilEOM < 4) {
-                $nextUntilEOM = app('navigation')->daysUntilEndOfMonth($nextExpectedMatch);
+                $nextUntilEOM = Navigation::daysUntilEndOfMonth($nextExpectedMatch);
                 $diffEOM      = $daysUntilEOM - $nextUntilEOM;
                 if ($diffEOM > 0) {
                     Log::debug(sprintf('Bill start is %d days from the end of the month. nextExceptedMatch is %d days from the end of the month.', $daysUntilEOM, $nextUntilEOM));
-                    $nextExpectedMatch->subDays(1);
+                    $nextExpectedMatch->subDays();
                     Log::debug(sprintf('Subtract %d days from next expected match, which is now %s', $diffEOM, $nextExpectedMatch->format('Y-m-d')));
                 }
             }
@@ -109,17 +111,15 @@ class BillDateCalculator
             $currentStart      = clone $nextExpectedMatch;
 
             ++$loop;
-            if ($loop > 12) {
-                Log::debug('Loop is more than 12, so we break.');
+            if ($loop > 31) {
+                Log::debug('Loop is more than 31, so we break.');
 
                 break;
             }
         }
         Log::debug('end of loop');
-        $simple             = $set->map(
-            static function (Carbon $date) {
-                return $date->format('Y-m-d');
-            }
+        $simple             = $set->map( // @phpstan-ignore-line
+            static fn (Carbon $date) => $date->format('Y-m-d')
         );
         Log::debug(sprintf('Found %d pay dates', $set->count()), $simple->toArray());
 
@@ -141,7 +141,7 @@ class BillDateCalculator
             return $billStartDate;
         }
 
-        $steps              = app('navigation')->diffInPeriods($period, $skip, $earliest, $billStartDate);
+        $steps              = Navigation::diffInPeriods($period, $skip, $earliest, $billStartDate);
         if ($steps === $this->diffInMonths) {
             Log::debug(sprintf('Steps is %d, which is the same as diffInMonths (%d), so we add another 1.', $steps, $this->diffInMonths));
             ++$steps;
@@ -151,7 +151,7 @@ class BillDateCalculator
         if ($steps > 0) {
             --$steps;
             Log::debug(sprintf('Steps is %d, because addPeriod already adds 1.', $steps));
-            $result = app('navigation')->addPeriod($billStartDate, $period, $steps);
+            $result = Navigation::addPeriod($billStartDate, $period, $steps);
         }
         Log::debug(sprintf('Number of steps is %d, added to %s, result is %s', $steps, $billStartDate->format('Y-m-d'), $result->format('Y-m-d')));
 

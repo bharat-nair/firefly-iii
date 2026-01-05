@@ -31,21 +31,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\ExpressionLanguage\SyntaxError;
 
-/**
- * @mixin IdeHelperRuleAction
- */
 class RuleAction extends Model
 {
     use ReturnsIntegerIdTrait;
-
-    protected $casts
-                        = [
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'active'          => 'boolean',
-            'order'           => 'int',
-            'stop_processing' => 'boolean',
-        ];
 
     protected $fillable = ['rule_id', 'action_type', 'action_value', 'order', 'active', 'stop_processing'];
 
@@ -78,17 +66,28 @@ class RuleAction extends Model
         return $this->belongsTo(Rule::class);
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'      => 'datetime',
+            'updated_at'      => 'datetime',
+            'active'          => 'boolean',
+            'order'           => 'int',
+            'stop_processing' => 'boolean',
+        ];
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function ruleId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

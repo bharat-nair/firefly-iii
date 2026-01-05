@@ -1,4 +1,5 @@
 <?php
+
 /**
  * TransactionTypeRepository.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\TransactionType;
 
+use Illuminate\Support\Facades\Log;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Models\TransactionType;
 use Illuminate\Support\Collection;
 
@@ -33,18 +36,18 @@ class TransactionTypeRepository implements TransactionTypeRepositoryInterface
 {
     public function findTransactionType(?TransactionType $type, ?string $typeString): TransactionType
     {
-        app('log')->debug('Now looking for a transaction type.');
-        if (null !== $type) {
-            app('log')->debug(sprintf('Found $type in parameters, its %s. Will return it.', $type->type));
+        Log::debug('Now looking for a transaction type.');
+        if ($type instanceof TransactionType) {
+            Log::debug(sprintf('Found $type in parameters, its %s. Will return it.', $type->type));
 
             return $type;
         }
-        $typeString ??= TransactionType::WITHDRAWAL;
+        $typeString ??= TransactionTypeEnum::WITHDRAWAL->value;
         $search = $this->findByType($typeString);
-        if (null === $search) {
-            $search = $this->findByType(TransactionType::WITHDRAWAL);
+        if (!$search instanceof TransactionType) {
+            $search = $this->findByType(TransactionTypeEnum::WITHDRAWAL->value);
         }
-        app('log')->debug(sprintf('Tried to search for "%s", came up with "%s". Will return it.', $typeString, $search->type));
+        Log::debug(sprintf('Tried to search for "%s", came up with "%s". Will return it.', $typeString, $search->type));
 
         return $search;
     }
@@ -62,6 +65,6 @@ class TransactionTypeRepository implements TransactionTypeRepositoryInterface
             return TransactionType::get();
         }
 
-        return TransactionType::where('type', 'LIKE', sprintf('%%%s%%', $query))->take($limit)->get();
+        return TransactionType::whereLike('type', sprintf('%%%s%%', $query))->take($limit)->get();
     }
 }

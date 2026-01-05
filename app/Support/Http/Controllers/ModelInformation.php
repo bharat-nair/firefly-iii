@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ModelInformation.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Http\Controllers;
 
+use Illuminate\Support\Facades\Log;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Bill;
@@ -30,6 +33,7 @@ use FireflyIII\Models\Tag;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use Throwable;
 
 /**
  * Trait ModelInformation
@@ -53,9 +57,9 @@ trait ModelInformation
                     'count'      => 1,
                 ]
             )->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Throwable was thrown in getActionsForBill(): %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+        } catch (Throwable $e) {
+            Log::error(sprintf('Throwable was thrown in getActionsForBill(): %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = 'Could not render view. See log files.';
 
             throw new FireflyException($result, 0, $e);
@@ -76,17 +80,17 @@ trait ModelInformation
 
         // types of liability:
         /** @var AccountType $debt */
-        $debt           = $repository->getAccountTypeByType(AccountType::DEBT);
+        $debt           = $repository->getAccountTypeByType(AccountTypeEnum::DEBT->value);
 
         /** @var AccountType $loan */
-        $loan           = $repository->getAccountTypeByType(AccountType::LOAN);
+        $loan           = $repository->getAccountTypeByType(AccountTypeEnum::LOAN->value);
 
         /** @var AccountType $mortgage */
-        $mortgage       = $repository->getAccountTypeByType(AccountType::MORTGAGE);
+        $mortgage       = $repository->getAccountTypeByType(AccountTypeEnum::MORTGAGE->value);
         $liabilityTypes = [
-            $debt->id     => (string)trans(sprintf('firefly.account_type_%s', AccountType::DEBT)),
-            $loan->id     => (string)trans(sprintf('firefly.account_type_%s', AccountType::LOAN)),
-            $mortgage->id => (string)trans(sprintf('firefly.account_type_%s', AccountType::MORTGAGE)),
+            $debt->id     => (string)trans(sprintf('firefly.account_type_%s', AccountTypeEnum::DEBT->value)),
+            $loan->id     => (string)trans(sprintf('firefly.account_type_%s', AccountTypeEnum::LOAN->value)),
+            $mortgage->id => (string)trans(sprintf('firefly.account_type_%s', AccountTypeEnum::MORTGAGE->value)),
         ];
         asort($liabilityTypes);
 
@@ -140,9 +144,9 @@ trait ModelInformation
                         'triggers'   => $triggers,
                     ]
                 )->render();
-            } catch (\Throwable $e) {
-                app('log')->debug(sprintf('Throwable was thrown in getTriggersForBill(): %s', $e->getMessage()));
-                app('log')->debug($e->getTraceAsString());
+            } catch (Throwable $e) {
+                Log::debug(sprintf('Throwable was thrown in getTriggersForBill(): %s', $e->getMessage()));
+                Log::debug($e->getTraceAsString());
 
                 throw new FireflyException(sprintf('Could not render trigger: %s', $e->getMessage()), 0, $e);
             }
@@ -157,7 +161,7 @@ trait ModelInformation
     /**
      * @throws FireflyException
      *
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings("PHPMD.ExcessiveMethodLength")
      */
     private function getTriggersForJournal(TransactionJournal $journal): array
     {
@@ -197,7 +201,7 @@ trait ModelInformation
         ++$index;
 
         // amount_exactly:
-        $journalTriggers[$index] = 'amount_exactly';
+        $journalTriggers[$index] = 'amount_is';
         $values[$index]          = $destination->amount;
         ++$index;
 
@@ -242,7 +246,7 @@ trait ModelInformation
         // notes (if)
         $notes                   = $journal->notes()->first();
         if (null !== $notes) {
-            $journalTriggers[$index] = 'notes_are';
+            $journalTriggers[$index] = 'notes_is';
             $values[$index]          = $notes->text;
         }
 
@@ -256,9 +260,9 @@ trait ModelInformation
                     'triggers'   => $triggers,
                 ];
                 $string     = view('rules.partials.trigger', $renderInfo)->render();
-            } catch (\Throwable $e) {
-                app('log')->debug(sprintf('Throwable was thrown in getTriggersForJournal(): %s', $e->getMessage()));
-                app('log')->debug($e->getTraceAsString());
+            } catch (Throwable $e) {
+                Log::debug(sprintf('Throwable was thrown in getTriggersForJournal(): %s', $e->getMessage()));
+                Log::debug($e->getTraceAsString());
 
                 throw new FireflyException(sprintf('Could not render trigger: %s', $e->getMessage()), 0, $e);
             }

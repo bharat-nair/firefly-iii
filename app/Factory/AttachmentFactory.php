@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AttachmentFactory.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -43,13 +44,13 @@ class AttachmentFactory
     public function create(array $data): ?Attachment
     {
         // append if necessary.
-        $model      = !str_contains($data['attachable_type'], 'FireflyIII') ? sprintf('FireflyIII\Models\%s', $data['attachable_type'])
-            : $data['attachable_type'];
+        $model      = str_contains((string) $data['attachable_type'], 'FireflyIII') ? $data['attachable_type']
+            : sprintf('FireflyIII\Models\%s', $data['attachable_type']);
 
         // get journal instead of transaction.
         if (Transaction::class === $model) {
             /** @var null|Transaction $transaction */
-            $transaction           = $this->user->transactions()->find((int)$data['attachable_id']);
+            $transaction           = $this->user->transactions()->find((int) $data['attachable_id']);
             if (null === $transaction) {
                 throw new FireflyException('Unexpectedly could not find transaction');
             }
@@ -72,7 +73,7 @@ class AttachmentFactory
                 'uploaded'        => 0,
             ]
         );
-        $notes      = (string)($data['notes'] ?? '');
+        $notes      = (string) ($data['notes'] ?? '');
         if ('' !== $notes) {
             $note       = new Note();
             $note->noteable()->associate($attachment);
@@ -83,8 +84,10 @@ class AttachmentFactory
         return $attachment;
     }
 
-    public function setUser(User $user): void
+    public function setUser(User $user): static
     {
         $this->user = $user;
+
+        return $this;
     }
 }

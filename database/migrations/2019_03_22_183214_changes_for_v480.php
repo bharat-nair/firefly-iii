@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 2019_03_22_183214_changes_for_v480.php
  * Copyright (c) 2019 james@firefly-iii.org.
@@ -24,6 +25,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Class ChangesForV480.
@@ -112,7 +114,7 @@ class ChangesForV480 extends Migration
     /**
      * Run the migrations.
      *
-     * @SuppressWarnings(PHPMD.ShortMethodName)
+     * @SuppressWarnings("PHPMD.ShortMethodName")
      */
     public function up(): void
     {

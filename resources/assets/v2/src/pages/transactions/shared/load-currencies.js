@@ -19,7 +19,7 @@
  */
 
 
-import Get from "../../../api/v2/model/currency/get.js";
+import Get from "../../../api/v1/model/currency/get.js";
 
 export function loadCurrencies() {
     let params = {
@@ -28,8 +28,8 @@ export function loadCurrencies() {
     let getter = new Get();
     return getter.list(params).then((response) => {
         let returnData = {
-            defaultCurrency: {},
-            nativeCurrencies: [],
+            primaryCurrency: {},
+            primaryCurrencies: [],
             foreignCurrencies: [],
             enabledCurrencies: [],
         };
@@ -46,16 +46,16 @@ export function loadCurrencies() {
                             id: current.id,
                             name: current.attributes.name,
                             code: current.attributes.code,
-                            default: current.attributes.default,
+                            primary: current.attributes.primary,
                             symbol: current.attributes.symbol,
                             decimal_places: current.attributes.decimal_places,
 
                         };
-                    if (obj.default) {
-                        returnData.defaultCurrency = obj;
+                    if (obj.primary) {
+                        returnData.primaryCurrency = obj;
                     }
                     returnData.enabledCurrencies.push(obj);
-                    returnData.nativeCurrencies.push(obj);
+                    returnData.primaryCurrencies.push(obj);
                     returnData.foreignCurrencies.push(obj);
                 }
             }

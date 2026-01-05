@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ConvertsDataTypes.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -26,9 +27,12 @@ namespace FireflyIII\Support\Request;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidDateException;
 use Carbon\Exceptions\InvalidFormatException;
-use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+
+use function Safe\preg_replace;
 
 /**
  * Trait ConvertsDataTypes
@@ -88,36 +92,11 @@ trait ConvertsDataTypes
             "\r", // carriage return
         ];
 
-    /**
-     * Return integer value.
-     */
-    public function convertInteger(string $field): int
+    public function clearIban(?string $string): ?string
     {
-        return (int)$this->get($field);
-    }
+        $string = $this->clearString($string);
 
-    /**
-     * Abstract method that always exists in the Request classes that use this
-     * trait, OR a stub needs to be added by any other class that uses this train.
-     */
-    abstract public function get(string $key, mixed $default = null): mixed;
-
-    /**
-     * Return string value.
-     */
-    public function convertString(string $field): string
-    {
-        $entry = $this->get($field);
-        if (!is_scalar($entry)) {
-            return '';
-        }
-
-        return (string)$this->clearString((string)$entry);
-    }
-
-    public function convertIban(string $field): string
-    {
-        return Steam::filterSpaces($this->convertString($field));
+        return Steam::filterSpaces($string);
     }
 
     public function clearString(?string $string): ?string
@@ -137,13 +116,6 @@ trait ConvertsDataTypes
         return trim($string);
     }
 
-    public function clearIban(?string $string): ?string
-    {
-        $string = $this->clearString($string);
-
-        return Steam::filterSpaces($string);
-    }
-
     public function clearStringKeepNewlines(?string $string): ?string
     {
         if (null === $string) {
@@ -157,8 +129,62 @@ trait ConvertsDataTypes
         // clear zalgo text (TODO also in API v2)
         $string = preg_replace('/(\pM{2})\pM+/u', '\1', $string);
 
-        return trim((string)$string);
+        return trim($string);
     }
+
+    public function convertIban(string $field): string
+    {
+        return Steam::filterSpaces($this->convertString($field));
+    }
+
+    /**
+     * Return integer value.
+     */
+    public function convertInteger(string $field): int
+    {
+        return (int)$this->get($field);
+    }
+
+    public function convertSortParameters(string $field, string $class): array
+    {
+        // assume this all works, because the validator would have caught any errors.
+        $parameter      = (string)request()->query->get($field);
+        if ('' === $parameter) {
+            return [];
+        }
+        $parts          = explode(',', $parameter);
+        $sortParameters = [];
+        foreach ($parts as $part) {
+            $part             = trim($part);
+            $direction        = 'asc';
+            if ('-' === $part[0]) {
+                $part      = substr($part, 1);
+                $direction = 'desc';
+            }
+            $sortParameters[] = [$part, $direction];
+        }
+
+        return $sortParameters;
+    }
+
+    /**
+     * Return string value.
+     */
+    public function convertString(string $field, string $default = ''): string
+    {
+        $entry = $this->get($field);
+        if (!is_scalar($entry)) {
+            return $default;
+        }
+
+        return (string)$this->clearString((string)$entry);
+    }
+
+    /**
+     * Abstract method that always exists in the Request classes that use this
+     * trait, OR a stub needs to be added by any other class that uses this train.
+     */
+    abstract public function get(string $key, mixed $default = null): mixed;
 
     /**
      * TODO duplicate, see SelectTransactionsRequest
@@ -191,6 +217,16 @@ trait ConvertsDataTypes
 
         return $collection;
     }
+
+    /**
+     * Abstract method that always exists in the Request classes that use this
+     * trait, OR a stub needs to be added by any other class that uses this train.
+     *
+     * @param mixed $key
+     *
+     * @return mixed
+     */
+    abstract public function has($key);
 
     /**
      * Return string value with newlines.
@@ -232,11 +268,14 @@ trait ConvertsDataTypes
         if ('yes' === $value) {
             return true;
         }
-        if ('1' === $value) {
+        if ('on' === $value) {
+            return true;
+        }
+        if ('y' === $value) {
             return true;
         }
 
-        return false;
+        return '1' === $value;
     }
 
     protected function convertDateTime(?string $string): ?Carbon
@@ -248,21 +287,21 @@ trait ConvertsDataTypes
         if ('' === $value) {
             return null;
         }
-        if (10 === strlen($value)) {
+        if (10 === strlen((string)$value)) {
             // probably a date format.
             try {
-                $carbon = Carbon::createFromFormat('Y-m-d', $value);
+                $carbon = Carbon::createFromFormat('Y-m-d', $value, config('app.timezone'));
             } catch (InvalidDateException $e) { // @phpstan-ignore-line
-                app('log')->error(sprintf('[1] "%s" is not a valid date: %s', $value, $e->getMessage()));
+                Log::error(sprintf('[1] "%s" is not a valid date: %s', $value, $e->getMessage()));
 
                 return null;
             } catch (InvalidFormatException $e) { // @phpstan-ignore-line
-                app('log')->error(sprintf('[2] "%s" is of an invalid format: %s', $value, $e->getMessage()));
+                Log::error(sprintf('[2] "%s" is of an invalid format: %s', $value, $e->getMessage()));
 
                 return null;
             }
-            if (null === $carbon) {
-                app('log')->error(sprintf('[2] "%s" is of an invalid format.', $value));
+            if (!$carbon instanceof Carbon) {
+                Log::error(sprintf('[2] "%s" is of an invalid format.', $value));
 
                 return null;
             }
@@ -273,12 +312,13 @@ trait ConvertsDataTypes
         // is an atom string, I hope?
         try {
             $carbon = Carbon::parse($value);
+            $carbon->setTimezone(config('app.timezone'));
         } catch (InvalidDateException $e) { // @phpstan-ignore-line
-            app('log')->error(sprintf('[3] "%s" is not a valid date or time: %s', $value, $e->getMessage()));
+            Log::error(sprintf('[3] "%s" is not a valid date or time: %s', $value, $e->getMessage()));
 
             return null;
         } catch (InvalidFormatException $e) {
-            app('log')->error(sprintf('[4] "%s" is of an invalid format: %s', $value, $e->getMessage()));
+            Log::error(sprintf('[4] "%s" is of an invalid format: %s', $value, $e->getMessage()));
 
             return null;
         }
@@ -302,6 +342,7 @@ trait ConvertsDataTypes
     protected function dateFromValue(?string $string): ?Carbon
     {
         if (null === $string) {
+
             return null;
         }
         if ('' === $string) {
@@ -311,17 +352,29 @@ trait ConvertsDataTypes
 
         try {
             $carbon = new Carbon($string, config('app.timezone'));
-        } catch (InvalidFormatException $e) {
+        } catch (InvalidFormatException) {
             // @ignoreException
         }
-        if (null === $carbon) {
-            app('log')->debug(sprintf('Invalid date: %s', $string));
+        if (!$carbon instanceof Carbon) {
+            Log::debug(sprintf('Invalid date: %s', $string));
 
             return null;
         }
-        app('log')->debug(sprintf('Date object: %s (%s)', $carbon->toW3cString(), $carbon->getTimezone()));
+        Log::debug(sprintf('Date object: %s (%s) from "%s"', $carbon->toW3cString(), $carbon->getTimezone(), $string));
 
         return $carbon;
+    }
+
+    protected function floatFromValue(?string $string): ?float
+    {
+        if (null === $string) {
+            return null;
+        }
+        if ('' === $string) {
+            return null;
+        }
+
+        return (float)$string;
     }
 
     /**
@@ -342,32 +395,25 @@ trait ConvertsDataTypes
     }
 
     /**
-     * Abstract method that always exists in the Request classes that use this
-     * trait, OR a stub needs to be added by any other class that uses this train.
-     *
-     * @param mixed $key
-     *
-     * @return mixed
-     */
-    abstract public function has($key);
-
-    /**
      * Return date or NULL.
      */
     protected function getCarbonDate(string $field): ?Carbon
     {
-        $result = null;
+        $data = (string)$this->get($field);
+        Log::debug(sprintf('Date string is "%s"', $data));
+
+        if ('' === $data) {
+            return null;
+        }
 
         try {
-            $result = '' !== (string)$this->get($field) ? new Carbon((string)$this->get($field), config('app.timezone')) : null;
-        } catch (InvalidFormatException $e) {
+            return new Carbon($data, config('app.timezone'));
+        } catch (InvalidFormatException) {
             // @ignoreException
-        }
-        if (null === $result) {
-            app('log')->debug(sprintf('Exception when parsing date "%s".', $this->get($field)));
+            Log::debug(sprintf('Exception when parsing date "%s".', $data));
         }
 
-        return $result;
+        return null;
     }
 
     /**
@@ -400,5 +446,34 @@ trait ConvertsDataTypes
         }
 
         return (int)$value;
+    }
+
+    protected function parseAccounts(mixed $array): array
+    {
+        if (!is_array($array)) {
+            return [];
+        }
+        $return = [];
+        foreach ($array as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $amount   = null;
+            if (array_key_exists('current_amount', $entry)) {
+                $amount = $this->clearString((string)($entry['current_amount'] ?? '0'));
+                if (null === $entry['current_amount']) {
+                    $amount = null;
+                }
+            }
+            if (!array_key_exists('current_amount', $entry)) {
+                $amount = null;
+            }
+            $return[] = [
+                'account_id'     => $this->integerFromValue((string)($entry['account_id'] ?? '0')),
+                'current_amount' => $amount,
+            ];
+        }
+
+        return $return;
     }
 }

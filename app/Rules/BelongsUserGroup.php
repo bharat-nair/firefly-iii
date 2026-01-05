@@ -1,4 +1,5 @@
 <?php
+
 /*
  * BelongsUserGroup.php
  * Copyright (c) 2023 james@firefly-iii.org
@@ -23,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Illuminate\Support\Facades\Log;
+use Closure;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Bill;
@@ -41,17 +44,12 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class BelongsUserGroup implements ValidationRule
 {
-    private UserGroup $userGroup;
-
     /**
      * Create a new rule instance.
      */
-    public function __construct(UserGroup $userGroup)
-    {
-        $this->userGroup = $userGroup;
-    }
+    public function __construct(private readonly UserGroup $userGroup) {}
 
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         $attribute = $this->parseAttribute($attribute);
         if (!auth()->check()) {
@@ -59,18 +57,18 @@ class BelongsUserGroup implements ValidationRule
 
             return;
         }
-        app('log')->debug(sprintf('Group: Going to validate "%s"', $attribute));
+        Log::debug(sprintf('Group: Going to validate "%s"', $attribute));
 
         $result    = match ($attribute) {
-            'piggy_bank_id'               => $this->validatePiggyBankId((int)$value),
+            'piggy_bank_id'               => $this->validatePiggyBankId((int) $value),
             'piggy_bank_name'             => $this->validatePiggyBankName($value),
-            'bill_id'                     => $this->validateBillId((int)$value),
-            'transaction_journal_id'      => $this->validateJournalId((int)$value),
+            'bill_id'                     => $this->validateBillId((int) $value),
+            'transaction_journal_id'      => $this->validateJournalId((int) $value),
             'bill_name'                   => $this->validateBillName($value),
-            'budget_id'                   => $this->validateBudgetId((int)$value),
-            'category_id'                 => $this->validateCategoryId((int)$value),
+            'budget_id'                   => $this->validateBudgetId((int) $value),
+            'category_id'                 => $this->validateCategoryId((int) $value),
             'budget_name'                 => $this->validateBudgetName($value),
-            'source_id', 'destination_id' => $this->validateAccountId((int)$value),
+            'source_id', 'destination_id' => $this->validateAccountId((int) $value),
             default                       => throw new FireflyException(sprintf('Rule BelongsUser cannot handle "%s"', $attribute)),
         };
         if (false === $result) {
@@ -123,11 +121,11 @@ class BelongsUserGroup implements ValidationRule
         }
         $count   = 0;
         foreach ($objects as $object) {
-            $objectValue = trim((string)$object->{$field}); // @phpstan-ignore-line
-            app('log')->debug(sprintf('Comparing object "%s" with value "%s"', $objectValue, $value));
+            $objectValue = trim((string) $object->{$field}); // @phpstan-ignore-line
+            Log::debug(sprintf('Comparing object "%s" with value "%s"', $objectValue, $value));
             if ($objectValue === $value) {
                 ++$count;
-                app('log')->debug(sprintf('Hit! Count is now %d', $count));
+                Log::debug(sprintf('Hit! Count is now %d', $count));
             }
         }
 
@@ -157,7 +155,7 @@ class BelongsUserGroup implements ValidationRule
     private function validateBillName(string $value): bool
     {
         $count = $this->countField(Bill::class, 'name', $value);
-        app('log')->debug(sprintf('Result of countField for bill name "%s" is %d', $value, $count));
+        Log::debug(sprintf('Result of countField for bill name "%s" is %d', $value, $count));
 
         return 1 === $count;
     }

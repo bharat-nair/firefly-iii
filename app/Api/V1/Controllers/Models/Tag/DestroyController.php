@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DestroyController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -26,6 +27,7 @@ namespace FireflyIII\Api\V1\Controllers\Models\Tag;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Models\Tag;
 use FireflyIII\Repositories\Tag\TagRepositoryInterface;
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
@@ -64,7 +66,7 @@ class DestroyController extends Controller
     public function destroy(Tag $tag): JsonResponse
     {
         $this->repository->destroy($tag);
-        app('preferences')->mark();
+        Preferences::mark();
 
         return response()->json([], 204);
     }

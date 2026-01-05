@@ -23,33 +23,30 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\TransactionGroupObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * @mixin IdeHelperTransactionGroup
+ * @property User                           $user
+ * @property UserGroup                      $userGroup
+ * @property Collection<TransactionJournal> $transactionJournals
  */
+#[ObservedBy([TransactionGroupObserver::class])]
 class TransactionGroup extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                        = [
-            'id'         => 'integer',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'title'      => 'string',
-            'date'       => 'datetime',
-        ];
 
     protected $fillable = ['user_id', 'user_group_id', 'title'];
 
@@ -60,13 +57,13 @@ class TransactionGroup extends Model
      */
     public static function routeBinder(string $value): self
     {
-        app('log')->debug(sprintf('Now in %s("%s")', __METHOD__, $value));
+        Log::debug(sprintf('Now in %s("%s")', __METHOD__, $value));
         if (auth()->check()) {
             $groupId = (int)$value;
 
             /** @var User $user */
             $user    = auth()->user();
-            app('log')->debug(sprintf('User authenticated as %s', $user->email));
+            Log::debug(sprintf('User authenticated as %s', $user->email));
 
             /** @var null|TransactionGroup $group */
             $group   = $user->transactionGroups()
@@ -74,12 +71,12 @@ class TransactionGroup extends Model
                 ->where('transaction_groups.id', $groupId)->first(['transaction_groups.*'])
             ;
             if (null !== $group) {
-                app('log')->debug(sprintf('Found group #%d.', $group->id));
+                Log::debug(sprintf('Found group #%d.', $group->id));
 
                 return $group;
             }
         }
-        app('log')->debug('Found no group.');
+        Log::debug('Found no group.');
 
         throw new NotFoundHttpException();
     }
@@ -97,5 +94,19 @@ class TransactionGroup extends Model
     public function userGroup(): BelongsTo
     {
         return $this->belongsTo(UserGroup::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'id'            => 'integer',
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'title'         => 'string',
+            'date'          => 'datetime',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
     }
 }

@@ -23,28 +23,25 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class LinkToBill.
  */
 class LinkToBill implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -57,30 +54,17 @@ class LinkToBill implements ActionInterface
         $billName   = $this->action->getValue($journal);
         $bill       = $repository->findByName($billName);
 
-        if (null !== $bill && TransactionType::WITHDRAWAL === $journal['transaction_type_type']) {
-            $count  = \DB::table('transaction_journals')->where('id', '=', $journal['transaction_journal_id'])
-                ->where('bill_id', $bill->id)->count()
-            ;
+        if (null !== $bill && TransactionTypeEnum::WITHDRAWAL->value === $journal['transaction_type_type']) {
+            $count  = DB::table('transaction_journals')->where('id', '=', $journal['transaction_journal_id'])->where('bill_id', $bill->id)->count();
             if (0 !== $count) {
-                app('log')->error(
-                    sprintf(
-                        'RuleAction LinkToBill could not set the bill of journal #%d to bill "%s": already set.',
-                        $journal['transaction_journal_id'],
-                        $billName
-                    )
-                );
-                event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.already_linked_to_subscription', ['name' => $billName])));
+                Log::error(sprintf('RuleAction LinkToBill could not set the bill of journal #%d to bill "%s": already set.', $journal['transaction_journal_id'], $billName));
+                // event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.already_linked_to_subscription', ['name' => $billName])));
 
                 return false;
             }
 
-            \DB::table('transaction_journals')
-                ->where('id', '=', $journal['transaction_journal_id'])
-                ->update(['bill_id' => $bill->id])
-            ;
-            app('log')->debug(
-                sprintf('RuleAction LinkToBill set the bill of journal #%d to bill #%d ("%s").', $journal['transaction_journal_id'], $bill->id, $bill->name)
-            );
+            DB::table('transaction_journals')->where('id', '=', $journal['transaction_journal_id'])->update(['bill_id' => $bill->id]);
+            Log::debug(sprintf('RuleAction LinkToBill set the bill of journal #%d to bill #%d ("%s").', $journal['transaction_journal_id'], $bill->id, $bill->name));
 
             /** @var TransactionJournal $object */
             $object = TransactionJournal::where('user_id', $journal['user_id'])->find($journal['transaction_journal_id']);
@@ -89,13 +73,7 @@ class LinkToBill implements ActionInterface
             return true;
         }
 
-        app('log')->error(
-            sprintf(
-                'RuleAction LinkToBill could not set the bill of journal #%d to bill "%s": no such bill found or not a withdrawal.',
-                $journal['transaction_journal_id'],
-                $billName
-            )
-        );
+        Log::error(sprintf('RuleAction LinkToBill could not set the bill of journal #%d to bill "%s": no such bill found or not a withdrawal.', $journal['transaction_journal_id'], $billName));
         event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.cannot_find_subscription', ['name' => $billName])));
 
         return false;

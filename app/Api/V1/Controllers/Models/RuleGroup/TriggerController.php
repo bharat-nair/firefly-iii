@@ -1,4 +1,5 @@
 <?php
+
 /*
  * TriggerController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -23,12 +24,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Models\RuleGroup;
 
+use Exception;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\RuleGroup\TestRequest;
 use FireflyIII\Api\V1\Requests\Models\RuleGroup\TriggerRequest;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\RuleGroup;
 use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
+use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\TransactionRules\Engine\RuleEngineInterface;
 use FireflyIII\Transformers\TransactionGroupTransformer;
 use FireflyIII\User;
@@ -99,6 +102,11 @@ class TriggerController extends Controller
         $transactions = $ruleEngine->find();
         $count        = $transactions->count();
 
+        // enrich
+        $enrichment   = new TransactionGroupEnrichment();
+        $enrichment->setUser($group->user);
+        $transactions = $enrichment->enrich($transactions);
+
         $paginator    = new LengthAwarePaginator($transactions, $count, 31337, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.rule-groups.test', [$group->id]).$this->buildParams());
 
@@ -121,7 +129,7 @@ class TriggerController extends Controller
      *
      * Execute the given rule group on a set of existing transactions.
      *
-     * @throws \Exception
+     * @throws Exception
      */
     public function triggerGroup(TriggerRequest $request, RuleGroup $group): JsonResponse
     {

@@ -35,8 +35,8 @@ class BudgetFactory
 
     public function find(?int $budgetId, ?string $budgetName): ?Budget
     {
-        $budgetId   = (int)$budgetId;
-        $budgetName = (string)$budgetName;
+        $budgetId   = (int) $budgetId;
+        $budgetName = (string) $budgetName;
 
         if (0 === $budgetId && '' === $budgetName) {
             return null;
@@ -53,7 +53,7 @@ class BudgetFactory
 
         if ('' !== $budgetName) {
             $budget = $this->findByName($budgetName);
-            if (null !== $budget) {
+            if ($budget instanceof Budget) {
                 return $budget;
             }
         }
@@ -63,6 +63,7 @@ class BudgetFactory
 
     public function findByName(string $name): ?Budget
     {
+        /** @var null|Budget */
         return $this->user->budgets()->where('name', $name)->first();
     }
 

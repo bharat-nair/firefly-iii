@@ -1,4 +1,5 @@
 <?php
+
 /**
  * DeleteController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Category;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Category;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
@@ -49,7 +51,7 @@ class DeleteController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.categories'));
+                app('view')->share('title', (string) trans('firefly.categories'));
                 app('view')->share('mainTitleIcon', 'fa-bookmark');
                 $this->repository = app(CategoryRepositoryInterface::class);
 
@@ -63,28 +65,26 @@ class DeleteController extends Controller
      *
      * @return Factory|View
      */
-    public function delete(Category $category)
+    public function delete(Category $category): Factory|\Illuminate\Contracts\View\View
     {
-        $subTitle = (string)trans('firefly.delete_category', ['name' => $category->name]);
+        $subTitle = (string) trans('firefly.delete_category', ['name' => $category->name]);
 
         // put previous url in session
         $this->rememberPreviousUrl('categories.delete.url');
 
-        return view('categories.delete', compact('category', 'subTitle'));
+        return view('categories.delete', ['category' => $category, 'subTitle' => $subTitle]);
     }
 
     /**
      * Destroy a category.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function destroy(Request $request, Category $category)
+    public function destroy(Request $request, Category $category): Redirector|RedirectResponse
     {
         $name = $category->name;
         $this->repository->destroy($category);
 
-        $request->session()->flash('success', (string)trans('firefly.deleted_category', ['name' => $name]));
-        app('preferences')->mark();
+        $request->session()->flash('success', (string) trans('firefly.deleted_category', ['name' => $name]));
+        Preferences::mark();
 
         return redirect($this->getPreviousUrl('categories.delete.url'));
     }

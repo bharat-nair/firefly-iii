@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RuleController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,10 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Json;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Throwable;
 
 /**
  * Class RuleController
@@ -40,18 +43,18 @@ class RuleController extends Controller
      */
     public function action(Request $request): JsonResponse
     {
-        $count   = (int)$request->get('count') > 0 ? (int)$request->get('count') : 1;
+        $count   = (int) $request->get('count') > 0 ? (int) $request->get('count') : 1;
         $keys    = array_keys(config('firefly.rule-actions'));
         $actions = [];
         foreach ($keys as $key) {
-            $actions[$key] = (string)trans('firefly.rule_action_'.$key.'_choice');
+            $actions[$key] = (string) trans('firefly.rule_action_'.$key.'_choice');
         }
 
         try {
-            $view = view('rules.partials.action', compact('actions', 'count'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Cannot render rules.partials.action: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $view = view('rules.partials.action', ['actions' => $actions, 'count' => $count])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Cannot render rules.partials.action: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $view = 'Could not render view.';
 
             throw new FireflyException($view, 0, $e);
@@ -67,21 +70,21 @@ class RuleController extends Controller
      */
     public function trigger(Request $request): JsonResponse
     {
-        $count     = (int)$request->get('count') > 0 ? (int)$request->get('count') : 1;
+        $count     = (int) $request->get('count') > 0 ? (int) $request->get('count') : 1;
         $operators = config('search.operators');
         $triggers  = [];
         foreach ($operators as $key => $operator) {
             if ('user_action' !== $key && false === $operator['alias']) {
-                $triggers[$key] = (string)trans(sprintf('firefly.rule_trigger_%s_choice', $key));
+                $triggers[$key] = (string) trans(sprintf('firefly.rule_trigger_%s_choice', $key));
             }
         }
         asort($triggers);
 
         try {
-            $view = view('rules.partials.trigger', compact('triggers', 'count'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Cannot render rules.partials.trigger: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $view = view('rules.partials.trigger', ['triggers' => $triggers, 'count' => $count])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Cannot render rules.partials.trigger: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $view = 'Could not render view.';
 
             throw new FireflyException($view, 0, $e);

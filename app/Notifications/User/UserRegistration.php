@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Notifications\User;
 
+use FireflyIII\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -36,53 +37,31 @@ class UserRegistration extends Notification
     use Queueable;
 
     /**
-     * Create a new notification instance.
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function __construct() {}
-
-    /**
-     * Get the array representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function toArray($notifiable)
+    public function toArray(User $notifiable): array
     {
         return [
         ];
     }
 
     /**
-     * Get the mail representation of the notification.
-     *
-     * @param mixed $notifiable
-     *
-     * @return MailMessage
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function toMail($notifiable)
+    public function toMail(User $notifiable): MailMessage
     {
-        return (new MailMessage())
+        return new MailMessage()
             ->markdown('emails.registered', ['address' => route('index')])
-            ->subject((string)trans('email.registered_subject'))
+            ->subject((string) trans('email.registered_subject'))
         ;
     }
 
     /**
-     * Get the notification's delivery channels.
-     *
-     * @param mixed $notifiable
-     *
-     * @return array
-     *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function via($notifiable)
+    public function via(User $notifiable): array
     {
+        // other settings will not be available at this point anyway.
         return ['mail'];
     }
 }

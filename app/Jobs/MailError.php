@@ -23,12 +23,22 @@ declare(strict_types=1);
 
 namespace FireflyIII\Jobs;
 
+use Carbon\Carbon;
+use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Message;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Safe\Exceptions\FilesystemException;
+use Safe\Exceptions\JsonException;
 use Symfony\Component\Mailer\Exception\TransportException;
+
+use function Safe\file_get_contents;
+use function Safe\file_put_contents;
+use function Safe\json_decode;
+use function Safe\json_encode;
 
 /**
  * Class MailError.
@@ -38,24 +48,15 @@ class MailError extends Job implements ShouldQueue
     use InteractsWithQueue;
     use SerializesModels;
 
-    protected string $destination;
-    protected array  $exception;
-    protected string $ipAddress;
-    protected array  $userData;
-
     /**
      * MailError constructor.
      */
-    public function __construct(array $userData, string $destination, string $ipAddress, array $exceptionData)
+    public function __construct(protected array $userData, protected string $destination, protected string $ipAddress, protected array $exception)
     {
-        $this->userData    = $userData;
-        $this->destination = $destination;
-        $this->ipAddress   = $ipAddress;
-        $this->exception   = $exceptionData;
-        $debug             = $exceptionData;
+        $debug = $this->exception;
         unset($debug['stackTrace'], $debug['headers']);
 
-        app('log')->error(sprintf('Exception is: %s', json_encode($debug)));
+        Log::error(sprintf('Exception is: %s', json_encode($debug)));
     }
 
     /**
@@ -63,7 +64,7 @@ class MailError extends Job implements ShouldQueue
      */
     public function handle(): void
     {
-        $email            = (string)config('firefly.site_owner');
+        $email            = (string) config('firefly.site_owner');
         $args             = $this->exception;
         $args['loggedIn'] = $this->userData['id'] > 0;
         $args['user']     = $this->userData;
@@ -79,29 +80,29 @@ class MailError extends Job implements ShouldQueue
 
         if ($this->attempts() < 3 && '' !== $email) {
             try {
-                \Mail::send(
+                Mail::send(
                     ['emails.error-html', 'emails.error-text'],
                     $args,
                     static function (Message $message) use ($email): void {
                         if ('mail@example.com' !== $email) {
-                            $message->to($email, $email)->subject((string)trans('email.error_subject'));
+                            $message->to($email, $email)->subject((string) trans('email.error_subject'));
                         }
                     }
                 );
-            } catch (\Exception|TransportException $e) { // @phpstan-ignore-line
+            } catch (Exception|TransportException $e) {
                 $message = $e->getMessage();
                 if (str_contains($message, 'Bcc')) {
-                    app('log')->warning('[Bcc] Could not email or log the error. Please validate your email settings, use the .env.example file as a guide.');
+                    Log::warning('[Bcc] Could not email or log the error. Please validate your email settings, use the .env.example file as a guide.');
 
                     return;
                 }
                 if (str_contains($message, 'RFC 2822')) {
-                    app('log')->warning('[RFC] Could not email or log the error. Please validate your email settings, use the .env.example file as a guide.');
+                    Log::warning('[RFC] Could not email or log the error. Please validate your email settings, use the .env.example file as a guide.');
 
                     return;
                 }
-                app('log')->error($e->getMessage());
-                app('log')->error($e->getTraceAsString());
+                Log::error($e->getMessage());
+                Log::error($e->getTraceAsString());
             }
         }
     }
@@ -126,11 +127,25 @@ class MailError extends Job implements ShouldQueue
 
         if (!file_exists($file)) {
             Log::debug(sprintf('Wrote new file in "%s"', $file));
-            file_put_contents($file, json_encode($limits, JSON_PRETTY_PRINT));
+
+            try {
+                file_put_contents($file, json_encode($limits, JSON_PRETTY_PRINT));
+            } catch (FilesystemException $e) {
+                Log::warning(sprintf('[a] Could not write file "%s": %s', $file, $e->getMessage()));
+            } catch (JsonException $e) {
+                Log::warning(sprintf('[b] Could not parse file "%s": %s', $file, $e->getMessage()));
+            }
         }
         if (file_exists($file)) {
             Log::debug(sprintf('Read file in "%s"', $file));
-            $limits = json_decode((string)file_get_contents($file), true);
+
+            try {
+                $limits = json_decode(file_get_contents($file), true);
+            } catch (FilesystemException $e) {
+                Log::warning(sprintf('[c] Could not read file "%s": %s', $file, $e->getMessage()));
+            } catch (JsonException $e) {
+                Log::warning(sprintf('[d] Could not parse file "%s": %s', $file, $e->getMessage()));
+            }
         }
         // limit reached?
         foreach ($types as $type => $info) {
@@ -138,15 +153,15 @@ class MailError extends Job implements ShouldQueue
             if (!array_key_exists($type, $limits)) {
                 Log::debug(sprintf('Limit "%s" reset to zero, did not exist yet.', $type));
                 $limits[$type] = [
-                    'time' => time(),
+                    'time' => Carbon::now()->getTimestamp(),
                     'sent' => 0,
                 ];
             }
 
-            if (time() - $limits[$type]['time'] > $info['reset']) {
-                Log::debug(sprintf('Time past for this limit is %d seconds, exceeding %d seconds. Reset to zero.', time() - $limits[$type]['time'], $info['reset']));
+            if (Carbon::now()->getTimestamp() - $limits[$type]['time'] > $info['reset']) {
+                Log::debug(sprintf('Time past for this limit is %d seconds, exceeding %d seconds. Reset to zero.', Carbon::now()->getTimestamp() - $limits[$type]['time'], $info['reset']));
                 $limits[$type] = [
-                    'time' => time(),
+                    'time' => Carbon::now()->getTimestamp(),
                     'sent' => 0,
                 ];
             }
@@ -158,7 +173,14 @@ class MailError extends Job implements ShouldQueue
             }
             ++$limits[$type]['sent'];
         }
-        file_put_contents($file, json_encode($limits, JSON_PRETTY_PRINT));
+
+        try {
+            file_put_contents($file, json_encode($limits, JSON_PRETTY_PRINT));
+        } catch (FilesystemException $e) {
+            Log::warning(sprintf('[c] Could not write file "%s": %s', $file, $e->getMessage()));
+        } catch (JsonException $e) {
+            Log::warning(sprintf('[c] Could not parse file "%s": %s', $file, $e->getMessage()));
+        }
         Log::debug('No limits reached, return FALSE.');
 
         return false;

@@ -20,7 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Ignore this comment
+
 
 declare(strict_types=1);
 
@@ -44,10 +44,10 @@ return [
     'accounts'               => 'Accounts',
     'changePassword'         => 'Change your password',
     'change_email'           => 'Change your email address',
-    'bills'                  => 'Bills',
-    'newBill'                => 'New bill',
-    'edit_bill'              => 'Edit bill ":name"',
-    'delete_bill'            => 'Delete bill ":name"',
+    'bills'                  => 'Subscriptions',
+    'newBill'                => 'New subscription',
+    'edit_bill'              => 'Edit subscription ":name"',
+    'delete_bill'            => 'Delete subscription ":name"',
     'reports'                => 'Reports',
     'search_result'          => 'Search results for ":query"',
     'withdrawal_list'        => 'Expenses',
@@ -56,7 +56,7 @@ return [
     'transfer_list'          => 'Transfers',
     'transfers_list'         => 'Transfers',
 
-    // Ignore this comment
+
 
     'reconciliation_list'    => 'Reconciliations',
     'create_withdrawal'      => 'Create new withdrawal',
@@ -80,4 +80,18 @@ return [
     'revenue_accounts'       => 'Revenue accounts',
     'liabilities_accounts'   => 'Liabilities',
     'placeholder'            => '[Placeholder]',
+
+    // mfa
+    'profile_mfa'            => 'Multi-factor authentication',
+    'mfa_enableMFA'          => 'Enable multi-factor authentication',
+    'mfa_backup_codes'       => 'Backup codes',
+    'mfa_disableMFA'         => 'Disable multi-factor authentication',
+
+    // notifications
+    'notification_index'     => 'Owner notifications',
+
+    // exchange rates
+    'exchange_rates_index'   => 'Exchange rates',
+    'exchange_rates_rates'   => 'Exchange rates between :from and :to (and the other way around)',
+
 ];

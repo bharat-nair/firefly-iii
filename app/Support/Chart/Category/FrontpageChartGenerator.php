@@ -25,14 +25,15 @@ declare(strict_types=1);
 namespace FireflyIII\Support\Chart\Category;
 
 use Carbon\Carbon;
-use FireflyIII\Models\AccountType;
-use FireflyIII\Models\Category;
+use FireflyIII\Enums\AccountTypeEnum;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
 use FireflyIII\Repositories\Category\NoCategoryRepositoryInterface;
 use FireflyIII\Repositories\Category\OperationsRepositoryInterface;
 use FireflyIII\Support\Http\Controllers\AugumentData;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class FrontpageChartGenerator
@@ -41,22 +42,19 @@ class FrontpageChartGenerator
 {
     use AugumentData;
 
+    public bool                           $convertToPrimary = false;
+    public TransactionCurrency            $primaryCurrency;
     private AccountRepositoryInterface    $accountRepos;
-    private array                         $currencies;
-    private Carbon                        $end;
+    private array                         $currencies       = [];
     private NoCategoryRepositoryInterface $noCatRepos;
     private OperationsRepositoryInterface $opsRepos;
     private CategoryRepositoryInterface   $repository;
-    private Carbon                        $start;
 
     /**
      * FrontpageChartGenerator constructor.
      */
-    public function __construct(Carbon $start, Carbon $end)
+    public function __construct(private Carbon $start, private Carbon $end)
     {
-        $this->currencies   = [];
-        $this->start        = $start;
-        $this->end          = $end;
         $this->repository   = app(CategoryRepositoryInterface::class);
         $this->accountRepos = app(AccountRepositoryInterface::class);
         $this->opsRepos     = app(OperationsRepositoryInterface::class);
@@ -65,49 +63,22 @@ class FrontpageChartGenerator
 
     public function generate(): array
     {
+        Log::debug(sprintf('Now in %s', __METHOD__));
         $categories   = $this->repository->getCategories();
-        $accounts     = $this->accountRepos->getAccountsByType(
-            [AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE, AccountType::ASSET, AccountType::DEFAULT]
-        );
-
-        // get expenses + income per category:
-        $collection   = [];
-
-        /** @var Category $category */
-        foreach ($categories as $category) {
-            // get expenses
-            $collection[] = $this->collectExpenses($category, $accounts);
-        }
+        $accounts     = $this->accountRepos->getAccountsByType([AccountTypeEnum::DEBT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::DEFAULT->value]);
+        $collection   = $this->collectExpensesAll($categories, $accounts);
 
         // collect for no-category:
-        $collection[] = $this->collectNoCatExpenses($accounts);
-
-        $tempData     = array_merge(...$collection);
+        $noCategory   = $this->collectNoCatExpenses($accounts);
+        $collection   = array_merge($collection, $noCategory);
 
         // sort temp array by amount.
-        $amounts      = array_column($tempData, 'sum_float');
-        array_multisort($amounts, SORT_ASC, $tempData);
+        $amounts      = array_column($collection, 'sum_float');
+        array_multisort($amounts, SORT_ASC, $collection);
 
-        $currencyData = $this->createCurrencyGroups($tempData);
+        $currencyData = $this->createCurrencyGroups($collection);
 
-        return $this->insertValues($currencyData, $tempData);
-    }
-
-    private function collectExpenses(Category $category, Collection $accounts): array
-    {
-        $spent    = $this->opsRepos->sumExpenses($this->start, $this->end, $accounts, new Collection([$category]));
-        $tempData = [];
-        foreach ($spent as $currency) {
-            $this->addCurrency($currency);
-            $tempData[] = [
-                'name'        => $category->name,
-                'sum'         => $currency['sum'],
-                'sum_float'   => round((float)$currency['sum'], $currency['currency_decimal_places']),
-                'currency_id' => (int)$currency['currency_id'],
-            ];
-        }
-
-        return $tempData;
+        return $this->insertValues($currencyData, $collection);
     }
 
     private function addCurrency(array $currency): void
@@ -121,6 +92,30 @@ class FrontpageChartGenerator
             'currency_code'           => $currency['currency_code'],
             'currency_decimal_places' => $currency['currency_decimal_places'],
         ];
+    }
+
+    private function collectExpensesAll(Collection $categories, Collection $accounts): array
+    {
+        Log::debug(sprintf('Collect expenses for %d category(ies).', count($categories)));
+        $spent    = $this->opsRepos->collectExpenses($this->start, $this->end, $accounts, $categories);
+        $tempData = [];
+        foreach ($categories as $category) {
+            $sums = $this->opsRepos->sumCollectedTransactionsByCategory($spent, $category, 'negative', $this->convertToPrimary);
+            if (0 === count($sums)) {
+                continue;
+            }
+            foreach ($sums as $currency) {
+                $this->addCurrency($currency);
+                $tempData[] = [
+                    'name'        => $category->name,
+                    'sum'         => $currency['sum'],
+                    'sum_float'   => round((float)$currency['sum'], $currency['currency_decimal_places']),
+                    'currency_id' => (int)$currency['currency_id'],
+                ];
+            }
+        }
+
+        return $tempData;
     }
 
     private function collectNoCatExpenses(Collection $accounts): array

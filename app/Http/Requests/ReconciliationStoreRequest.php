@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ReconciliationStoreRequest.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,13 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Rules\IsValidAmount;
 use FireflyIII\Rules\ValidJournals;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class ReconciliationStoreRequest
@@ -57,7 +58,7 @@ class ReconciliationStoreRequest extends FormRequest
             'journals'      => $transactions,
             'reconcile'     => $this->convertString('reconcile'),
         ];
-        app('log')->debug('In ReconciliationStoreRequest::getAll(). Will now return data.');
+        Log::debug('In ReconciliationStoreRequest::getAll(). Will now return data.');
 
         return $data;
     }
@@ -81,7 +82,7 @@ class ReconciliationStoreRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

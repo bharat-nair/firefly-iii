@@ -1,4 +1,5 @@
 <?php
+
 /**
  * JournalAPIRepository.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,19 +25,21 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Journal;
 
 use FireflyIII\Models\Attachment;
+use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\PiggyBankEvent;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Class JournalAPIRepository
  */
-class JournalAPIRepository implements JournalAPIRepositoryInterface
+class JournalAPIRepository implements JournalAPIRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * Returns transaction by ID. Used to validate attachments.
@@ -59,11 +62,10 @@ class JournalAPIRepository implements JournalAPIRepositoryInterface
     {
         $set  = $journal->attachments;
 
-        /** @var \Storage $disk */
-        $disk = \Storage::disk('upload');
+        $disk = Storage::disk('upload');
 
         return $set->each(
-            static function (Attachment $attachment) use ($disk) {
+            static function (Attachment $attachment) use ($disk): Attachment {
                 $notes                   = $attachment->notes()->first();
                 $attachment->file_exists = $disk->exists($attachment->fileName());
                 $attachment->notes_text  = null !== $notes ? $notes->text : ''; // TODO should not set notes like this.
@@ -87,18 +89,11 @@ class JournalAPIRepository implements JournalAPIRepositoryInterface
     {
         $events = $journal->piggyBankEvents()->get();
         $events->each(
-            static function (PiggyBankEvent $event): void {
-                $event->piggyBank = $event->piggyBank()->withTrashed()->first();
+            static function (PiggyBankEvent $event): void { // @phpstan-ignore-line
+                $event->piggyBank = PiggyBank::withTrashed()->find($event->piggy_bank_id);
             }
         );
 
         return $events;
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 }

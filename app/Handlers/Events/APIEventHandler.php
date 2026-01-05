@@ -1,4 +1,5 @@
 <?php
+
 /**
  * APIEventHandler.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,10 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Handlers\Events;
 
+use Exception;
 use FireflyIII\Notifications\User\NewAccessToken;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Passport\Events\AccessTokenCreated;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class APIEventHandler
@@ -38,29 +41,29 @@ class APIEventHandler
      */
     public function accessTokenCreated(AccessTokenCreated $event): void
     {
-        app('log')->debug(__METHOD__);
+        Log::debug(__METHOD__);
 
         /** @var UserRepositoryInterface $repository */
         $repository = app(UserRepositoryInterface::class);
-        $user       = $repository->find((int)$event->userId);
+        $user       = $repository->find((int) $event->userId);
 
         if (null !== $user) {
             try {
                 Notification::send($user, new NewAccessToken());
-            } catch (\Exception $e) { // @phpstan-ignore-line
+            } catch (Exception $e) {
                 $message = $e->getMessage();
                 if (str_contains($message, 'Bcc')) {
-                    app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+                    Log::warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
 
                     return;
                 }
                 if (str_contains($message, 'RFC 2822')) {
-                    app('log')->warning('[RFC] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
+                    Log::warning('[RFC] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
 
                     return;
                 }
-                app('log')->error($e->getMessage());
-                app('log')->error($e->getTraceAsString());
+                Log::error($e->getMessage());
+                Log::error($e->getTraceAsString());
             }
         }
     }

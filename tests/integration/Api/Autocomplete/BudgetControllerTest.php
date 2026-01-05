@@ -1,4 +1,5 @@
 <?php
+
 /*
  * BudgetControllerTest.php
  * Copyright (c) 2024 tasnim0tantawi
@@ -24,7 +25,6 @@ declare(strict_types=1);
 namespace Tests\integration\Api\Autocomplete;
 
 use FireflyIII\Models\Budget;
-use FireflyIII\Models\UserGroup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\integration\TestCase;
 use FireflyIII\User;
@@ -42,17 +42,6 @@ final class BudgetControllerTest extends TestCase
      * @covers \FireflyIII\Api\V1\Controllers\Autocomplete\BudgetController
      */
     use RefreshDatabase;
-
-    protected function createAuthenticatedUser(): User
-    {
-        $userGroup = UserGroup::create(['title' => 'Test Group']);
-
-        return User::create([
-            'email'         => 'test@email.com',
-            'password'      => 'password',
-            'user_group_id' => $userGroup->id,
-        ]);
-    }
 
     private function createTestBudgets(int $count, User $user): void
     {
@@ -72,7 +61,7 @@ final class BudgetControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.budgets'), ['Accept' => 'application/json']);
         $response->assertStatus(401);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertContent('{"message":"Unauthenticated","exception":"AuthenticationException"}');
+        $response->assertContent('{"message":"Unauthenticated.","exception":"AuthenticationException"}');
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheBudgetsEndpointThenReturns200HttpCode(): void

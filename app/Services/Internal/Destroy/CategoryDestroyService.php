@@ -1,4 +1,5 @@
 <?php
+
 /**
  * CategoryDestroyService.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -24,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Services\Internal\Destroy;
 
 use FireflyIII\Models\Category;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class CategoryDestroyService
@@ -35,12 +37,12 @@ class CategoryDestroyService
         $category->delete();
 
         // also delete all relations between categories and transaction journals:
-        \DB::table('category_transaction_journal')->where('category_id', $category->id)->delete();
+        DB::table('category_transaction_journal')->where('category_id', $category->id)->delete();
 
         // also delete all relations between categories and transactions:
-        \DB::table('category_transaction')->where('category_id', $category->id)->delete();
+        DB::table('category_transaction')->where('category_id', $category->id)->delete();
 
         // delete references to category from recurring transactions.
-        \DB::table('rt_meta')->where('name', 'category_id')->where('value', $category->id)->delete();
+        DB::table('rt_meta')->where('name', 'category_id')->where('value', $category->id)->delete();
     }
 }

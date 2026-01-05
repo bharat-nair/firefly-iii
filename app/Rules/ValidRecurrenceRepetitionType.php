@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ValidRecurrenceRepetitionType.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Rules;
 
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
@@ -33,11 +35,11 @@ class ValidRecurrenceRepetitionType implements ValidationRule
     /**
      * Determine if the validation rule passes.
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $value = (string)$value;
+        $value = (string) $value;
         if ('daily' === $value) {
             return;
         }

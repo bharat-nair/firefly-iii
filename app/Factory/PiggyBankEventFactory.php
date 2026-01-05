@@ -26,6 +26,7 @@ namespace FireflyIII\Factory;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Create piggy bank events.
@@ -36,9 +37,9 @@ class PiggyBankEventFactory
 {
     public function create(TransactionJournal $journal, ?PiggyBank $piggyBank): void
     {
-        app('log')->debug(sprintf('Now in PiggyBankEventCreate for a %s', $journal->transactionType->type));
-        if (null === $piggyBank) {
-            app('log')->debug('Piggy bank is null');
+        Log::debug(sprintf('Now in PiggyBankEventCreate for a %s', $journal->transactionType->type));
+        if (!$piggyBank instanceof PiggyBank) {
+            Log::debug('Piggy bank is null');
 
             return;
         }
@@ -47,20 +48,13 @@ class PiggyBankEventFactory
         $piggyRepos = app(PiggyBankRepositoryInterface::class);
         $piggyRepos->setUser($journal->user);
 
-        $repetition = $piggyRepos->getRepetition($piggyBank);
-        if (null === $repetition) {
-            app('log')->error(sprintf('No piggy bank repetition on %s!', $journal->date->format('Y-m-d')));
-
-            return;
-        }
-        app('log')->debug('Found repetition');
-        $amount     = $piggyRepos->getExactAmount($piggyBank, $repetition, $journal);
+        $amount     = $piggyRepos->getExactAmount($piggyBank, $journal);
         if (0 === bccomp($amount, '0')) {
-            app('log')->debug('Amount is zero, will not create event.');
+            Log::debug('Amount is zero, will not create event.');
 
             return;
         }
         // amount can be negative here
-        $piggyRepos->addAmountToRepetition($repetition, $amount, $journal);
+        $piggyRepos->addAmountToPiggyBank($piggyBank, $amount, $journal);
     }
 }

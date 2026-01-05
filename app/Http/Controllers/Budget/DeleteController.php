@@ -1,4 +1,5 @@
 <?php
+
 /**
  * DeleteController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Budget;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Budget;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
@@ -49,7 +51,7 @@ class DeleteController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.budgets'));
+                app('view')->share('title', (string) trans('firefly.budgets'));
                 app('view')->share('mainTitleIcon', 'fa-pie-chart');
                 $this->repository = app(BudgetRepositoryInterface::class);
 
@@ -63,27 +65,25 @@ class DeleteController extends Controller
      *
      * @return Factory|View
      */
-    public function delete(Budget $budget)
+    public function delete(Budget $budget): Factory|\Illuminate\Contracts\View\View
     {
-        $subTitle = (string)trans('firefly.delete_budget', ['name' => $budget->name]);
+        $subTitle = (string) trans('firefly.delete_budget', ['name' => $budget->name]);
 
         // put previous url in session
         $this->rememberPreviousUrl('budgets.delete.url');
 
-        return view('budgets.delete', compact('budget', 'subTitle'));
+        return view('budgets.delete', ['budget' => $budget, 'subTitle' => $subTitle]);
     }
 
     /**
      * Destroys a budget.
-     *
-     * @return Redirector|RedirectResponse
      */
-    public function destroy(Request $request, Budget $budget)
+    public function destroy(Request $request, Budget $budget): Redirector|RedirectResponse
     {
         $name = $budget->name;
         $this->repository->destroy($budget);
-        $request->session()->flash('success', (string)trans('firefly.deleted_budget', ['name' => $name]));
-        app('preferences')->mark();
+        $request->session()->flash('success', (string) trans('firefly.deleted_budget', ['name' => $name]));
+        Preferences::mark();
 
         return redirect($this->getPreviousUrl('budgets.delete.url'));
     }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * CategoryController.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,11 +24,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
+use Illuminate\Http\Request;
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
+use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteApiRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\Category;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
-use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -36,6 +38,7 @@ use Illuminate\Http\JsonResponse;
 class CategoryController extends Controller
 {
     private CategoryRepositoryInterface $repository;
+    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
 
     /**
      * CategoryController constructor.
@@ -44,11 +47,11 @@ class CategoryController extends Controller
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
-                /** @var User $user */
-                $user             = auth()->user();
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
                 $this->repository = app(CategoryRepositoryInterface::class);
-                $this->repository->setUser($user);
+                $this->repository->setUser($this->user);
+                $this->repository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
@@ -59,19 +62,16 @@ class CategoryController extends Controller
      * Documentation for this endpoint is at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getCategoriesAC
      */
-    public function categories(AutocompleteRequest $request): JsonResponse
+    public function categories(AutocompleteApiRequest $request): JsonResponse
     {
-        $data     = $request->getData();
-        $result   = $this->repository->searchCategory($data['query'], $this->parameters->get('limit'));
+        $result   = $this->repository->searchCategory($request->attributes->get('query'), $request->attributes->get('limit'));
         $filtered = $result->map(
-            static function (Category $item) {
-                return [
-                    'id'   => (string)$item->id,
-                    'name' => $item->name,
-                ];
-            }
+            static fn (Category $item): array => [
+                'id'   => (string) $item->id,
+                'name' => $item->name,
+            ]
         );
 
-        return response()->json($filtered);
+        return response()->api($filtered->toArray());
     }
 }

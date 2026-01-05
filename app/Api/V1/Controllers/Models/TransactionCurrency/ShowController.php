@@ -25,9 +25,8 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers\Models\TransactionCurrency;
 
 use FireflyIII\Api\V1\Controllers\Controller;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\CurrencyTransformer;
@@ -69,8 +68,6 @@ class ShowController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/listCurrency
      *
      * Display a listing of the resource.
-     *
-     * @throws FireflyException
      */
     public function index(): JsonResponse
     {
@@ -99,43 +96,35 @@ class ShowController extends Controller
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/getCurrency
      *
      * Show a currency.
-     *
-     * @throws FireflyException
      */
     public function show(TransactionCurrency $currency): JsonResponse
     {
         /** @var User $user */
-        $user            = auth()->user();
-        $manager         = $this->getManager();
-        $defaultCurrency = app('amount')->getDefaultCurrencyByUserGroup($user->userGroup);
-        $this->parameters->set('defaultCurrency', $defaultCurrency);
+        $user        = auth()->user();
+        $manager     = $this->getManager();
+        $this->parameters->set('primaryCurrency', $this->primaryCurrency);
 
         // update fields with user info.
         $currency->refreshForUser($user);
 
         /** @var CurrencyTransformer $transformer */
-        $transformer     = app(CurrencyTransformer::class);
+        $transformer = app(CurrencyTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource        = new Item($currency, $transformer, 'currencies');
+        $resource    = new Item($currency, $transformer, 'currencies');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/getDefaultCurrency
-     *
      * Show a currency.
-     *
-     * @throws FireflyException
      */
-    public function showDefault(): JsonResponse
+    public function showPrimary(): JsonResponse
     {
         /** @var User $user */
         $user        = auth()->user();
         $manager     = $this->getManager();
-        $currency    = app('amount')->getDefaultCurrencyByUserGroup($user->userGroup);
+        $currency    = $this->primaryCurrency;
 
         // update fields with user info.
         $currency->refreshForUser($user);

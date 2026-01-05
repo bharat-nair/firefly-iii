@@ -23,7 +23,7 @@
 declare(strict_types=1);
 
 return [
-    'operators' => [
+    'operators'    => [
         'user_action'                     => ['alias' => false, 'needs_context' => true],
         'account_id'                      => ['alias' => false, 'needs_context' => true],
         'reconciled'                      => ['alias' => false, 'needs_context' => false],
@@ -110,6 +110,11 @@ return [
         'bill'                            => ['alias' => true, 'alias_for' => 'bill_contains', 'needs_context' => true],
         'bill_ends'                       => ['alias' => false, 'needs_context' => true],
         'bill_starts'                     => ['alias' => false, 'needs_context' => true],
+        'subscription_is'                 => ['alias' => true, 'alias_for' => 'bill_is', 'needs_context' => true],
+        'subscription_contains'           => ['alias' => true, 'alias_for' => 'bill_contains', 'needs_context' => true],
+        'subscription'                    => ['alias' => true, 'alias_for' => 'bill_contains', 'needs_context' => true],
+        'subscription_ends'               => ['alias' => true, 'alias_for' => 'bill_ends', 'needs_context' => true],
+        'subscription_starts'             => ['alias' => true, 'alias_for' => 'bill_starts', 'needs_context' => true],
         'external_id_is'                  => ['alias' => false, 'needs_context' => true],
         'external_id_contains'            => ['alias' => false, 'needs_context' => true],
         'external_id'                     => ['alias' => true, 'alias_for' => 'external_id_contains', 'needs_context' => true],
@@ -129,6 +134,7 @@ return [
         'has_any_category'                => ['alias' => false, 'needs_context' => false],
         'has_any_budget'                  => ['alias' => false, 'needs_context' => false],
         'has_any_bill'                    => ['alias' => false, 'needs_context' => false],
+        'has_any_subscription'            => ['alias' => true, 'needs_context' => false, 'alias_for' => 'has_any_bill'],
         'has_any_tag'                     => ['alias' => false, 'needs_context' => false],
         'any_notes'                       => ['alias' => false, 'needs_context' => false],
         'has_any_notes'                   => ['alias' => true, 'alias_for' => 'any_notes', 'needs_context' => false],
@@ -139,6 +145,7 @@ return [
         'has_no_category'                 => ['alias' => false, 'needs_context' => false],
         'has_no_budget'                   => ['alias' => false, 'needs_context' => false],
         'has_no_bill'                     => ['alias' => false, 'needs_context' => false],
+        'has_no_subscription'             => ['alias' => true, 'needs_context' => false, 'alias_for' => 'has_no_bill'],
         'has_no_tag'                      => ['alias' => false, 'needs_context' => false],
         'no_notes'                        => ['alias' => false, 'needs_context' => false],
         'no_external_url'                 => ['alias' => false, 'needs_context' => false],
@@ -240,5 +247,20 @@ return [
         'sepa_ct_is'                      => ['alias' => false, 'needs_context' => true],
         'no_external_id'                  => ['alias' => false, 'needs_context' => false],
         'any_external_id'                 => ['alias' => false, 'needs_context' => false],
+        'has_any_external_id'             => ['alias' => true, 'alias_for' => 'any_external_id', 'needs_context' => false],
+
+        // based on source or destination balance. Very heavy search.
+        'source_balance_gte'              => ['alias' => false, 'needs_context' => true],
+        'source_balance_gt'               => ['alias' => false, 'needs_context' => true],
+        'source_balance_lte'              => ['alias' => false, 'needs_context' => true],
+        'source_balance_lt'               => ['alias' => false, 'needs_context' => true],
+        'source_balance_is'               => ['alias' => false, 'needs_context' => true],
+        'destination_balance_gte'         => ['alias' => false, 'needs_context' => true],
+        'destination_balance_gt'          => ['alias' => false, 'needs_context' => true],
+        'destination_balance_lte'         => ['alias' => false, 'needs_context' => true],
+        'destination_balance_lt'          => ['alias' => false, 'needs_context' => true],
+        'destination_balance_is'          => ['alias' => false, 'needs_context' => true],
     ],
+    // Which query parser to use - 'new' or 'legacy'
+    'query_parser' => env('QUERY_PARSER_IMPLEMENTATION', 'legacy'),
 ];

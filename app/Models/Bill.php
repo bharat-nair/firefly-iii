@@ -23,9 +23,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Casts\SeparateTimezoneCaster;
+use FireflyIII\Handlers\Observer\BillObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,29 +38,12 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperBill
- */
+#[ObservedBy([BillObserver::class])]
 class Bill extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                      = [
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'deleted_at'      => 'datetime',
-            'date'            => 'date',
-            'end_date'        => 'date',
-            'extension_date'  => 'date',
-            'skip'            => 'int',
-            'automatch'       => 'boolean',
-            'active'          => 'boolean',
-            'name_encrypted'  => 'boolean',
-            'match_encrypted' => 'boolean',
-        ];
 
     protected $fillable
                       = [
@@ -68,6 +54,7 @@ class Bill extends Model
             'user_group_id',
             'amount_max',
             'date',
+            'date_tz',
             'repeat_freq',
             'skip',
             'automatch',
@@ -75,6 +62,10 @@ class Bill extends Model
             'transaction_currency_id',
             'end_date',
             'extension_date',
+            'end_date_tz',
+            'extension_date_tz',
+            'native_amount_min',
+            'native_amount_max',
         ];
 
     protected $hidden = ['amount_min_encrypted', 'amount_max_encrypted', 'name_encrypted', 'match_encrypted'];
@@ -160,7 +151,7 @@ class Bill extends Model
     protected function amountMax(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
         );
     }
 
@@ -170,14 +161,35 @@ class Bill extends Model
     protected function amountMin(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: static fn ($value): string => (string)$value,
         );
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'        => 'datetime',
+            'updated_at'        => 'datetime',
+            'deleted_at'        => 'datetime',
+            'date'              => SeparateTimezoneCaster::class,
+            'end_date'          => SeparateTimezoneCaster::class,
+            'extension_date'    => SeparateTimezoneCaster::class,
+            'skip'              => 'int',
+            'automatch'         => 'boolean',
+            'active'            => 'boolean',
+            'name_encrypted'    => 'boolean',
+            'match_encrypted'   => 'boolean',
+            'amount_min'        => 'string',
+            'amount_max'        => 'string',
+            'native_amount_min' => 'string',
+            'native_amount_max' => 'string',
+        ];
     }
 
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
@@ -187,14 +199,14 @@ class Bill extends Model
     protected function skip(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 
     protected function transactionCurrencyId(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
     }
 }

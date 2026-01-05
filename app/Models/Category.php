@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Category.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,9 +24,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\CategoryObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -33,22 +36,12 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperCategory
- */
+#[ObservedBy([CategoryObserver::class])]
 class Category extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
-
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'encrypted'  => 'boolean',
-        ];
 
     protected $fillable = ['user_id', 'user_group_id', 'name'];
 
@@ -88,7 +81,7 @@ class Category extends Model
     }
 
     /**
-     * Get all of the category's notes.
+     * Get all the category's notes.
      */
     public function notes(): MorphMany
     {
@@ -103,5 +96,22 @@ class Category extends Model
     public function transactions(): BelongsToMany
     {
         return $this->belongsToMany(Transaction::class, 'category_transaction', 'category_id');
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'encrypted'     => 'boolean',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
+    }
+
+    public function primaryPeriodStatistics(): MorphMany
+    {
+        return $this->morphMany(PeriodStatistic::class, 'primary_statable');
     }
 }

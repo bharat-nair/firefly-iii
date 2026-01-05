@@ -1,4 +1,5 @@
 <?php
+
 /*
  * MessageController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -61,8 +62,6 @@ class MessageController extends Controller
     /**
      * This endpoint is documented at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/webhooks/getWebhookMessages
-     *
-     * @throws FireflyException
      */
     public function index(Webhook $webhook): JsonResponse
     {

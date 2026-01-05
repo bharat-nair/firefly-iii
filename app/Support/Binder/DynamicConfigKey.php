@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DynamicConfigKey.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -42,7 +43,7 @@ class DynamicConfigKey
     /**
      * @throws NotFoundHttpException
      *
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public static function routeBinder(string $value, Route $route): string
     {

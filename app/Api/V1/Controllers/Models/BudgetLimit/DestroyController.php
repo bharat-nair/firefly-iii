@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DestroyController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -28,6 +29,7 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Repositories\Budget\BudgetLimitRepositoryInterface;
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 
@@ -70,7 +72,7 @@ class DestroyController extends Controller
             throw new FireflyException('20028: The budget limit does not belong to the budget.');
         }
         $this->blRepository->destroyBudgetLimit($budgetLimit);
-        app('preferences')->mark();
+        Preferences::mark();
 
         return response()->json([], 204);
     }

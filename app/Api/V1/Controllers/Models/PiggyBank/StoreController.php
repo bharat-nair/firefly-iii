@@ -1,4 +1,5 @@
 <?php
+
 /*
  * StoreController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -27,7 +28,9 @@ use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\PiggyBank\StoreRequest;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
+use FireflyIII\Support\JsonApi\Enrichments\PiggyBankEnrichment;
 use FireflyIII\Transformers\PiggyBankTransformer;
+use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use League\Fractal\Resource\Item;
 
@@ -66,6 +69,13 @@ class StoreController extends Controller
     {
         $piggyBank   = $this->repository->store($request->getAll());
         $manager     = $this->getManager();
+
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new PiggyBankEnrichment();
+        $enrichment->setUser($admin);
+        $piggyBank   = $enrichment->enrichSingle($piggyBank);
 
         /** @var PiggyBankTransformer $transformer */
         $transformer = app(PiggyBankTransformer::class);

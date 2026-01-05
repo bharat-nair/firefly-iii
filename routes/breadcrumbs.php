@@ -54,12 +54,11 @@ if (!function_exists('limitStringLength')) {
     {
         $maxChars = 75;
         $length   = strlen($string);
-        $result   = $string;
         if ($length > $maxChars) {
-            $result = substr_replace($string, ' ... ', (int)($maxChars / 2), $length - $maxChars);
+            return substr_replace($string, ' ... ', (int)($maxChars / 2), $length - $maxChars);
         }
 
-        return $result;
+        return $string;
     }
 }
 
@@ -109,7 +108,7 @@ Breadcrumbs::for(
 
         $breadcrumbs->parent('accounts.index', $what);
         $breadcrumbs->push(limitStringLength($account->name), route('accounts.show.all', [$account->id]));
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             $title = trans(
                 'firefly.between_dates_breadcrumb',
                 [
@@ -172,103 +171,112 @@ Breadcrumbs::for(
 
 // ADMIN
 Breadcrumbs::for(
-    'admin.index',
+    'settings.index',
     static function (Generator $breadcrumbs): void {
         $breadcrumbs->parent('home');
-        $breadcrumbs->push(trans('firefly.administration'), route('admin.index'));
+        $breadcrumbs->push(trans('firefly.system_settings'), route('settings.index'));
     }
 );
 
 Breadcrumbs::for(
-    'admin.users',
+    'settings.notification.index',
     static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('admin.index');
-        $breadcrumbs->push(trans('firefly.list_all_users'), route('admin.users'));
+        $breadcrumbs->parent('home');
+        $breadcrumbs->push(trans('firefly.administration'), route('settings.index'));
+        $breadcrumbs->push(trans('breadcrumbs.notification_index'), route('settings.notification.index'));
     }
 );
 
 Breadcrumbs::for(
-    'admin.users.show',
+    'settings.users',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('settings.index');
+        $breadcrumbs->push(trans('firefly.list_all_users'), route('settings.users'));
+    }
+);
+
+Breadcrumbs::for(
+    'settings.users.show',
     static function (Generator $breadcrumbs, User $user): void {
-        $breadcrumbs->parent('admin.users');
-        $breadcrumbs->push(trans('firefly.single_user_administration', ['email' => $user->email]), route('admin.users.show', [$user->id]));
+        $breadcrumbs->parent('settings.users');
+        $breadcrumbs->push(trans('firefly.single_user_administration', ['email' => $user->email]), route('settings.users.show', [$user->id]));
     }
 );
 Breadcrumbs::for(
-    'admin.users.edit',
+    'settings.users.edit',
     static function (Generator $breadcrumbs, User $user): void {
-        $breadcrumbs->parent('admin.users');
-        $breadcrumbs->push(trans('firefly.edit_user', ['email' => $user->email]), route('admin.users.edit', [$user->id]));
+        $breadcrumbs->parent('settings.users');
+        $breadcrumbs->push(trans('firefly.edit_user', ['email' => $user->email]), route('settings.users.edit', [$user->id]));
     }
 );
 Breadcrumbs::for(
-    'admin.users.delete',
+    'settings.users.delete',
     static function (Generator $breadcrumbs, User $user): void {
-        $breadcrumbs->parent('admin.users');
-        $breadcrumbs->push(trans('firefly.delete_user', ['email' => $user->email]), route('admin.users.delete', [$user->id]));
+        $breadcrumbs->parent('settings.users');
+        $breadcrumbs->push(trans('firefly.delete_user', ['email' => $user->email]), route('settings.users.delete', [$user->id]));
     }
 );
 
 Breadcrumbs::for(
-    'admin.users.domains',
+    'settings.users.domains',
     static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('admin.index');
-        $breadcrumbs->push(trans('firefly.blocked_domains'), route('admin.users.domains'));
+        $breadcrumbs->parent('settings.index');
+        $breadcrumbs->push(trans('firefly.blocked_domains'), route('settings.users.domains'));
     }
 );
 
 Breadcrumbs::for(
-    'admin.configuration.index',
+    'settings.configuration.index',
     static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('admin.index');
-        $breadcrumbs->push(trans('firefly.instance_configuration'), route('admin.configuration.index'));
+        $breadcrumbs->parent('settings.index');
+        $breadcrumbs->push(trans('firefly.instance_configuration'), route('settings.configuration.index'));
     }
 );
 Breadcrumbs::for(
-    'admin.update-check',
+    'settings.update-check',
     static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('admin.index');
-        $breadcrumbs->push(trans('firefly.update_check_title'), route('admin.update-check'));
-    }
-);
-
-Breadcrumbs::for(
-    'admin.links.index',
-    static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('admin.index');
-        $breadcrumbs->push(trans('firefly.journal_link_configuration'), route('admin.links.index'));
+        $breadcrumbs->parent('settings.index');
+        $breadcrumbs->push(trans('firefly.update_check_title'), route('settings.update-check'));
     }
 );
 
 Breadcrumbs::for(
-    'admin.links.create',
+    'settings.links.index',
     static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('admin.links.index');
-        $breadcrumbs->push(trans('firefly.create_new_link_type'), route('admin.links.create'));
+        $breadcrumbs->parent('settings.index');
+        $breadcrumbs->push(trans('firefly.journal_link_configuration'), route('settings.links.index'));
     }
 );
 
 Breadcrumbs::for(
-    'admin.links.show',
+    'settings.links.create',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('settings.links.index');
+        $breadcrumbs->push(trans('firefly.create_new_link_type'), route('settings.links.create'));
+    }
+);
+
+Breadcrumbs::for(
+    'settings.links.show',
     static function (Generator $breadcrumbs, LinkType $linkType): void {
-        $breadcrumbs->parent('admin.links.index');
-        $breadcrumbs->push(trans('firefly.overview_for_link', ['name' => limitStringLength($linkType->name)]), route('admin.links.show', [$linkType->id]));
+        $breadcrumbs->parent('settings.links.index');
+        $breadcrumbs->push(trans('firefly.overview_for_link', ['name' => limitStringLength($linkType->name)]), route('settings.links.show', [$linkType->id]));
     }
 );
 
 Breadcrumbs::for(
-    'admin.links.edit',
+    'settings.links.edit',
     static function (Generator $breadcrumbs, LinkType $linkType): void {
-        $breadcrumbs->parent('admin.links.index');
-        $breadcrumbs->push(trans('firefly.edit_link_type', ['name' => limitStringLength($linkType->name)]), route('admin.links.edit', [$linkType->id]));
+        $breadcrumbs->parent('settings.links.index');
+        $breadcrumbs->push(trans('firefly.edit_link_type', ['name' => limitStringLength($linkType->name)]), route('settings.links.edit', [$linkType->id]));
     }
 );
 
 Breadcrumbs::for(
-    'admin.links.delete',
+    'settings.links.delete',
     static function (Generator $breadcrumbs, LinkType $linkType): void {
-        $breadcrumbs->parent('admin.links.index');
-        $breadcrumbs->push(trans('firefly.delete_link_type', ['name' => limitStringLength($linkType->name)]), route('admin.links.delete', [$linkType->id]));
+        $breadcrumbs->parent('settings.links.index');
+        $breadcrumbs->push(trans('firefly.delete_link_type', ['name' => limitStringLength($linkType->name)]), route('settings.links.delete', [$linkType->id]));
     }
 );
 
@@ -442,7 +450,7 @@ Breadcrumbs::for(
     static function (Generator $breadcrumbs, ?Carbon $start = null, ?Carbon $end = null): void {
         $breadcrumbs->parent('budgets.index');
         $breadcrumbs->push(trans('firefly.journals_without_budget'), route('budgets.no-budget'));
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             $title = trans(
                 'firefly.between_dates_breadcrumb',
                 [
@@ -530,7 +538,7 @@ Breadcrumbs::for(
     static function (Generator $breadcrumbs, Category $category, ?Carbon $start = null, ?Carbon $end = null): void {
         $breadcrumbs->parent('categories.index');
         $breadcrumbs->push(limitStringLength($category->name), route('categories.show', [$category->id]));
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             $title = trans(
                 'firefly.between_dates_breadcrumb',
                 [
@@ -557,7 +565,7 @@ Breadcrumbs::for(
     static function (Generator $breadcrumbs, ?Carbon $start = null, ?Carbon $end = null): void {
         $breadcrumbs->parent('categories.index');
         $breadcrumbs->push(trans('firefly.journals_without_category'), route('categories.no-category'));
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             $title = trans(
                 'firefly.between_dates_breadcrumb',
                 [
@@ -687,13 +695,7 @@ Breadcrumbs::for(
     }
 );
 
-Breadcrumbs::for(
-    'profile.code',
-    static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('home');
-        $breadcrumbs->push(trans('breadcrumbs.profile'), route('profile.index'));
-    }
-);
+
 
 Breadcrumbs::for(
     'profile.new-backup-codes',
@@ -710,6 +712,63 @@ Breadcrumbs::for(
         $breadcrumbs->push(trans('breadcrumbs.logout_others'), route('profile.logout-others'));
     }
 );
+
+// Profile MFA
+Breadcrumbs::for(
+    'profile.mfa.index',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('profile.index');
+        $breadcrumbs->push(trans('breadcrumbs.profile_mfa'), route('profile.mfa.index'));
+    }
+);
+Breadcrumbs::for(
+    'profile.mfa.enableMFA',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('profile.mfa.index');
+        $breadcrumbs->push(trans('breadcrumbs.mfa_enableMFA'), route('profile.mfa.enableMFA'));
+    }
+);
+
+Breadcrumbs::for(
+    'profile.mfa.disableMFA',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('profile.mfa.index');
+        $breadcrumbs->push(trans('breadcrumbs.mfa_disableMFA'), route('profile.mfa.disableMFA'));
+    }
+);
+
+Breadcrumbs::for(
+    'profile.mfa.backup-codes',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('profile.mfa.index');
+        $breadcrumbs->push(trans('breadcrumbs.mfa_backup_codes'), route('profile.mfa.backup-codes'));
+    }
+);
+Breadcrumbs::for(
+    'profile.mfa.backup-codes.post',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('profile.mfa.index');
+        $breadcrumbs->push(trans('breadcrumbs.mfa_backup_codes'), route('profile.mfa.backup-codes'));
+    }
+);
+
+// exchange rates
+Breadcrumbs::for(
+    'exchange-rates.index',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('home');
+        $breadcrumbs->push(trans('breadcrumbs.exchange_rates_index'), route('exchange-rates.index'));
+    }
+);
+
+Breadcrumbs::for(
+    'exchange-rates.rates',
+    static function (Generator $breadcrumbs, TransactionCurrency $from, TransactionCurrency $to): void {
+        $breadcrumbs->parent('exchange-rates.index');
+        $breadcrumbs->push(trans('breadcrumbs.exchange_rates_rates', ['from' => $from->name, 'to' => $to->name]), route('exchange-rates.rates', [$from->code, $to->code]));
+    }
+);
+
 
 // PROFILE
 Breadcrumbs::for(
@@ -905,10 +964,10 @@ Breadcrumbs::for(
     'rules.create',
     static function (Generator $breadcrumbs, ?RuleGroup $ruleGroup = null): void {
         $breadcrumbs->parent('rules.index');
-        if (null === $ruleGroup) {
+        if (!$ruleGroup instanceof RuleGroup) {
             $breadcrumbs->push(trans('firefly.make_new_rule_no_group'), route('rules.create'));
         }
-        if (null !== $ruleGroup) {
+        if ($ruleGroup instanceof RuleGroup) {
             $breadcrumbs->push(trans('firefly.make_new_rule', ['title' => $ruleGroup->title]), route('rules.create', [$ruleGroup]));
         }
     }
@@ -934,7 +993,7 @@ Breadcrumbs::for(
     'rules.edit',
     static function (Generator $breadcrumbs, Rule $rule): void {
         $breadcrumbs->parent('rules.index');
-        $breadcrumbs->push(trans('firefly.edit_rule', ['title' => $rule->title]), route('rules.edit', [$rule]));
+        $breadcrumbs->push(trans('firefly.edit_rule', ['nr' => $rule->order, 'title' => $rule->title]), route('rules.edit', [$rule]));
     }
 );
 Breadcrumbs::for(
@@ -1036,7 +1095,7 @@ Breadcrumbs::for(
         $breadcrumbs->parent('tags.index');
 
         $breadcrumbs->push($tag->tag, route('tags.show', [$tag->id, $start, $end]));
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             $title = trans(
                 'firefly.between_dates_breadcrumb',
                 [
@@ -1067,7 +1126,7 @@ Breadcrumbs::for(
         $breadcrumbs->parent('home');
         $breadcrumbs->push(trans('breadcrumbs.'.$what.'_list'), route('transactions.index', [$what]));
 
-        if (null !== $start && null !== $end) {
+        if ($start instanceof Carbon && $end instanceof Carbon) {
             // add date range:
             $title = trans(
                 'firefly.between_dates_breadcrumb',
@@ -1142,7 +1201,7 @@ Breadcrumbs::for(
     static function (Generator $breadcrumbs, TransactionGroup $group): void {
         /** @var TransactionJournal $first */
         $first = $group->transactionJournals()->first();
-        $type  = strtolower($first->transactionType->type);
+        $type  = strtolower((string) $first->transactionType->type);
         $title = limitStringLength($first->description);
         if ($group->transactionJournals()->count() > 1) {
             $title = limitStringLength((string)$group->title);
@@ -1181,7 +1240,7 @@ Breadcrumbs::for(
     'transactions.mass.edit',
     static function (Generator $breadcrumbs, array $journals): void {
         if (0 !== count($journals)) {
-            $objectType = strtolower(reset($journals)['transaction_type_type']);
+            $objectType = strtolower((string) reset($journals)['transaction_type_type']);
             $breadcrumbs->parent('transactions.index', $objectType);
             $breadcrumbs->push(trans('firefly.mass_edit_journals'), route('transactions.mass.edit', ['']));
 
@@ -1194,7 +1253,7 @@ Breadcrumbs::for(
 Breadcrumbs::for(
     'transactions.mass.delete',
     static function (Generator $breadcrumbs, array $journals): void {
-        $objectType = strtolower(reset($journals)['transaction_type_type']);
+        $objectType = strtolower((string) reset($journals)['transaction_type_type']);
         $breadcrumbs->parent('transactions.index', $objectType);
         $breadcrumbs->push(trans('firefly.mass_edit_journals'), route('transactions.mass.delete', ['']));
     }
@@ -1207,7 +1266,7 @@ Breadcrumbs::for(
         if (0 !== count($journals)) {
             $ids   = Arr::pluck($journals, 'transaction_journal_id');
             $first = reset($journals);
-            $breadcrumbs->parent('transactions.index', strtolower($first['transaction_type_type']));
+            $breadcrumbs->parent('transactions.index', strtolower((string) $first['transaction_type_type']));
             $breadcrumbs->push(trans('firefly.mass_bulk_journals'), route('transactions.bulk.edit', $ids));
 
             return;
@@ -1290,25 +1349,25 @@ Breadcrumbs::for(
     }
 );
 
-Breadcrumbs::for(
-    'administrations.show',
-    static function (Generator $breadcrumbs, UserGroup $userGroup): void {
-        $breadcrumbs->parent('administrations.index');
-        $breadcrumbs->push(limitStringLength($userGroup->title), route('administrations.show', [$userGroup->id]));
-    }
-);
+// Breadcrumbs::for(
+//    'administrations.show',
+//    static function (Generator $breadcrumbs, UserGroup $userGroup): void {
+//        $breadcrumbs->parent('administrations.index');
+//        $breadcrumbs->push(limitStringLength($userGroup->title), route('administrations.show', [$userGroup->id]));
+//    }
+// );
 
-Breadcrumbs::for(
-    'administrations.create',
-    static function (Generator $breadcrumbs): void {
-        $breadcrumbs->parent('administrations.index');
-        $breadcrumbs->push(trans('firefly.administrations_create_breadcrumb'), route('administrations.create'));
-    }
-);
+// Breadcrumbs::for(
+//    'administrations.create',
+//    static function (Generator $breadcrumbs): void {
+//        $breadcrumbs->parent('administrations.index');
+//        $breadcrumbs->push(trans('firefly.administrations_create_breadcrumb'), route('administrations.create'));
+//    }
+// );
 Breadcrumbs::for(
     'administrations.edit',
     static function (Generator $breadcrumbs, UserGroup $userGroup): void {
-        $breadcrumbs->parent('administrations.show', $userGroup);
+        $breadcrumbs->parent('administrations.index');
         $breadcrumbs->push(trans('firefly.edit_administration_breadcrumb', ['title' => limitStringLength($userGroup->title)]), route('administrations.edit', [$userGroup->id]));
     }
 );

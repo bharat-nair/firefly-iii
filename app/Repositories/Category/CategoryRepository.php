@@ -24,6 +24,7 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\Category;
 
 use Carbon\Carbon;
+use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\CategoryFactory;
 use FireflyIII\Models\Attachment;
@@ -33,23 +34,25 @@ use FireflyIII\Models\RecurrenceTransactionMeta;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Services\Internal\Destroy\CategoryDestroyService;
 use FireflyIII\Services\Internal\Update\CategoryUpdateService;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Class CategoryRepository.
  */
-class CategoryRepository implements CategoryRepositoryInterface
+class CategoryRepository implements CategoryRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     public function categoryEndsWith(string $query, int $limit): Collection
     {
         $search = $this->user->categories();
         if ('' !== $query) {
-            $search->where('name', 'LIKE', sprintf('%%%s', $query));
+            $search->whereLike('name', sprintf('%%%s', $query));
         }
 
         return $search->take($limit)->get();
@@ -59,7 +62,7 @@ class CategoryRepository implements CategoryRepositoryInterface
     {
         $search = $this->user->categories();
         if ('' !== $query) {
-            $search->where('name', 'LIKE', sprintf('%s%%', $query));
+            $search->whereLike('name', sprintf('%s%%', $query));
         }
 
         return $search->take($limit)->get();
@@ -83,8 +86,8 @@ class CategoryRepository implements CategoryRepositoryInterface
 
         /** @var Category $category */
         foreach ($categories as $category) {
-            \DB::table('category_transaction')->where('category_id', $category->id)->delete();
-            \DB::table('category_transaction_journal')->where('category_id', $category->id)->delete();
+            DB::table('category_transaction')->where('category_id', $category->id)->delete();
+            DB::table('category_transaction_journal')->where('category_id', $category->id)->delete();
             RecurrenceTransactionMeta::where('name', 'category_id')->where('value', $category->id)->delete();
             RuleAction::where('action_type', 'set_category')->where('action_value', $category->name)->delete();
             $category->delete();
@@ -105,21 +108,21 @@ class CategoryRepository implements CategoryRepositoryInterface
      */
     public function findCategory(?int $categoryId, ?string $categoryName): ?Category
     {
-        app('log')->debug('Now in findCategory()');
-        app('log')->debug(sprintf('Searching for category with ID #%d...', $categoryId));
-        $result = $this->find((int)$categoryId);
-        if (null === $result) {
-            app('log')->debug(sprintf('Searching for category with name %s...', $categoryName));
-            $result = $this->findByName((string)$categoryName);
-            if (null === $result && '' !== (string)$categoryName) {
+        Log::debug('Now in findCategory()');
+        Log::debug(sprintf('Searching for category with ID #%d...', $categoryId));
+        $result = $this->find((int) $categoryId);
+        if (!$result instanceof Category) {
+            Log::debug(sprintf('Searching for category with name %s...', $categoryName));
+            $result = $this->findByName((string) $categoryName);
+            if (!$result instanceof Category && '' !== (string) $categoryName) {
                 // create it!
                 $result = $this->store(['name' => $categoryName]);
             }
         }
-        if (null !== $result) {
-            app('log')->debug(sprintf('Found category #%d: %s', $result->id, $result->name));
+        if ($result instanceof Category) {
+            Log::debug(sprintf('Found category #%d: %s', $result->id, $result->name));
         }
-        app('log')->debug(sprintf('Found category result is null? %s', var_export(null === $result, true)));
+        Log::debug(sprintf('Found category result is null? %s', var_export(!$result instanceof Category, true)));
 
         return $result;
     }
@@ -129,6 +132,7 @@ class CategoryRepository implements CategoryRepositoryInterface
      */
     public function find(int $categoryId): ?Category
     {
+        /** @var null|Category */
         return $this->user->categories()->find($categoryId);
     }
 
@@ -137,6 +141,7 @@ class CategoryRepository implements CategoryRepositoryInterface
      */
     public function findByName(string $name): ?Category
     {
+        /** @var null|Category */
         return $this->user->categories()->where('name', $name)->first(['categories.*']);
     }
 
@@ -165,13 +170,6 @@ class CategoryRepository implements CategoryRepositoryInterface
         return $category;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     public function removeNotes(Category $category): void
     {
         $category->notes()->delete();
@@ -193,13 +191,13 @@ class CategoryRepository implements CategoryRepositoryInterface
         $firstJournalDate     = $this->getFirstJournalDate($category);
         $firstTransactionDate = $this->getFirstTransactionDate($category);
 
-        if (null === $firstTransactionDate && null === $firstJournalDate) {
+        if (!$firstTransactionDate instanceof Carbon && !$firstJournalDate instanceof Carbon) {
             return null;
         }
-        if (null === $firstTransactionDate) {
+        if (!$firstTransactionDate instanceof Carbon) {
             return $firstJournalDate;
         }
-        if (null === $firstJournalDate) {
+        if (!$firstJournalDate instanceof Carbon) {
             return $firstTransactionDate;
         }
 
@@ -215,11 +213,8 @@ class CategoryRepository implements CategoryRepositoryInterface
         $query  = $category->transactionJournals()->orderBy('date', 'ASC');
         $result = $query->first(['transaction_journals.*']);
 
-        if (null !== $result) {
-            return $result->date;
-        }
+        return $result?->date;
 
-        return null;
     }
 
     private function getFirstTransactionDate(Category $category): ?Carbon
@@ -242,11 +237,10 @@ class CategoryRepository implements CategoryRepositoryInterface
     {
         $set  = $category->attachments()->get();
 
-        /** @var \Storage $disk */
-        $disk = \Storage::disk('upload');
+        $disk = Storage::disk('upload');
 
         return $set->each(
-            static function (Attachment $attachment) use ($disk) {
+            static function (Attachment $attachment) use ($disk): Attachment { // @phpstan-ignore-line
                 $notes                   = $attachment->notes()->first();
                 $attachment->file_exists = $disk->exists($attachment->fileName());
                 $attachment->notes_text  = null !== $notes ? $notes->text : '';
@@ -267,28 +261,26 @@ class CategoryRepository implements CategoryRepositoryInterface
     public function getNoteText(Category $category): ?string
     {
         $dbNote = $category->notes()->first();
-        if (null === $dbNote) {
-            return null;
-        }
 
-        return $dbNote->text;
+        return $dbNote?->text;
+
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function lastUseDate(Category $category, Collection $accounts): ?Carbon
     {
         $lastJournalDate     = $this->getLastJournalDate($category, $accounts);
         $lastTransactionDate = $this->getLastTransactionDate($category, $accounts);
 
-        if (null === $lastTransactionDate && null === $lastJournalDate) {
+        if (!$lastTransactionDate instanceof Carbon && !$lastJournalDate instanceof Carbon) {
             return null;
         }
-        if (null === $lastTransactionDate) {
+        if (!$lastTransactionDate instanceof Carbon) {
             return $lastJournalDate;
         }
-        if (null === $lastJournalDate) {
+        if (!$lastJournalDate instanceof Carbon) {
             return $lastTransactionDate;
         }
 
@@ -310,15 +302,12 @@ class CategoryRepository implements CategoryRepositoryInterface
 
         $result = $query->first(['transaction_journals.*']);
 
-        if (null !== $result) {
-            return $result->date;
-        }
+        return $result?->date;
 
-        return null;
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     private function getLastTransactionDate(Category $category, Collection $accounts): ?Carbon
     {
@@ -344,14 +333,14 @@ class CategoryRepository implements CategoryRepositoryInterface
     {
         $search = $this->user->categories();
         if ('' !== $query) {
-            $search->where('name', 'LIKE', sprintf('%%%s%%', $query));
+            $search->whereLike('name', sprintf('%%%s%%', $query));
         }
 
         return $search->take($limit)->get();
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function update(Category $category, array $data): Category
     {
@@ -360,5 +349,44 @@ class CategoryRepository implements CategoryRepositoryInterface
         $service->setUser($this->user);
 
         return $service->update($category, $data);
+    }
+
+    public function periodCollection(Category $category, Carbon $start, Carbon $end): array
+    {
+        Log::debug(sprintf('periodCollection(#%d, %s, %s)', $category->id, $start->format('Y-m-d'), $end->format('Y-m-d')));
+
+        return $category->transactionJournals()
+            ->leftJoin('transactions', 'transactions.transaction_journal_id', '=', 'transaction_journals.id')
+            ->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id')
+            ->leftJoin('transaction_currencies', 'transaction_currencies.id', '=', 'transactions.transaction_currency_id')
+            ->leftJoin('transaction_currencies as foreign_currencies', 'foreign_currencies.id', '=', 'transactions.foreign_currency_id')
+            ->where('transaction_journals.date', '>=', $start)
+            ->where('transaction_journals.date', '<=', $end)
+            ->where('transactions.amount', '>', 0)
+            ->get([
+                // currencies
+                'transaction_currencies.id as currency_id',
+                'transaction_currencies.code as currency_code',
+                'transaction_currencies.name as currency_name',
+                'transaction_currencies.symbol as currency_symbol',
+                'transaction_currencies.decimal_places as currency_decimal_places',
+
+                // foreign
+                'foreign_currencies.id as foreign_currency_id',
+                'foreign_currencies.code as foreign_currency_code',
+                'foreign_currencies.name as foreign_currency_name',
+                'foreign_currencies.symbol as foreign_currency_symbol',
+                'foreign_currencies.decimal_places as foreign_currency_decimal_places',
+
+                // fields
+                'transaction_journals.date',
+                'transaction_types.type',
+                'transaction_journals.transaction_currency_id',
+                'transactions.amount',
+                'transactions.native_amount as pc_amount',
+                'transactions.foreign_amount',
+            ])
+            ->toArray()
+        ;
     }
 }

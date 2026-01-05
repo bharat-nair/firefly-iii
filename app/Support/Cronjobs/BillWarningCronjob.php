@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RecurringCronjob.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,10 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Cronjobs;
 
+use FireflyIII\Support\Facades\Preferences;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Jobs\WarnAboutBills;
 use FireflyIII\Models\Configuration;
+use FireflyIII\Support\Facades\FireflyConfig;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class BillWarningCronjob
@@ -38,23 +42,23 @@ class BillWarningCronjob extends AbstractCronjob
      */
     public function fire(): void
     {
-        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        Log::debug(sprintf('Now in %s', __METHOD__));
 
         /** @var Configuration $config */
-        $config        = app('fireflyconfig')->get('last_bw_job', 0);
+        $config        = FireflyConfig::get('last_bw_job', 0);
         $lastTime      = (int)$config->data;
-        $diff          = time() - $lastTime;
-        $diffForHumans = today(config('app.timezone'))->diffForHumans(Carbon::createFromTimestamp($lastTime), null, true);
+        $diff          = now(config('app.timezone'))->getTimestamp() - $lastTime;
+        $diffForHumans = now(config('app.timezone'))->diffForHumans(Carbon::createFromTimestamp($lastTime), null, true);
 
         if (0 === $lastTime) {
-            app('log')->info('The bill warning cron-job has never fired before.');
+            Log::info('The bill notification cron-job has never fired before.');
         }
         // less than half a day ago:
         if ($lastTime > 0 && $diff <= 43200) {
-            app('log')->info(sprintf('It has been %s since the bill warning cron-job has fired.', $diffForHumans));
+            Log::info(sprintf('It has been %s since the bill notification cron-job has fired.', $diffForHumans));
             if (false === $this->force) {
-                app('log')->info('The cron-job will not fire now.');
-                $this->message      = sprintf('It has been %s since the bill warning cron-job has fired. It will not fire now.', $diffForHumans);
+                Log::info('The cron-job will not fire now.');
+                $this->message      = sprintf('It has been %s since the bill notification cron-job has fired. It will not fire now.', $diffForHumans);
                 $this->jobFired     = false;
                 $this->jobErrored   = false;
                 $this->jobSucceeded = false;
@@ -62,21 +66,21 @@ class BillWarningCronjob extends AbstractCronjob
                 return;
             }
 
-            app('log')->info('Execution of the bill warning cron-job has been FORCED.');
+            Log::info('Execution of the bill notification cron-job has been FORCED.');
         }
 
         if ($lastTime > 0 && $diff > 43200) {
-            app('log')->info(sprintf('It has been %s since the bill warning cron-job has fired. It will fire now!', $diffForHumans));
+            Log::info(sprintf('It has been %s since the bill notification cron-job has fired. It will fire now!', $diffForHumans));
         }
 
         $this->fireWarnings();
 
-        app('preferences')->mark();
+        Preferences::mark();
     }
 
     private function fireWarnings(): void
     {
-        app('log')->info(sprintf('Will now fire bill warning job task for date "%s".', $this->date->format('Y-m-d H:i:s')));
+        Log::info(sprintf('Will now fire bill notification job task for date "%s".', $this->date->format('Y-m-d H:i:s')));
 
         /** @var WarnAboutBills $job */
         $job                = app(WarnAboutBills::class);
@@ -88,10 +92,10 @@ class BillWarningCronjob extends AbstractCronjob
         $this->jobFired     = true;
         $this->jobErrored   = false;
         $this->jobSucceeded = true;
-        $this->message      = 'Bill warning cron job fired successfully.';
+        $this->message      = 'Bill notification cron job fired successfully.';
 
-        app('fireflyconfig')->set('last_bw_job', (int)$this->date->format('U'));
-        app('log')->info(sprintf('Marked the last time this job has run as "%s" (%d)', $this->date->format('Y-m-d H:i:s'), (int)$this->date->format('U')));
-        app('log')->info('Done with bill warning cron job task.');
+        FireflyConfig::set('last_bw_job', (int)$this->date->format('U'));
+        Log::info(sprintf('Marked the last time this job has run as "%s" (%d)', $this->date->format('Y-m-d H:i:s'), (int)$this->date->format('U')));
+        Log::info('Done with bill notification cron job task.');
     }
 }

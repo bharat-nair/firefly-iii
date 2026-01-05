@@ -1,4 +1,5 @@
 <?php
+
 /*
  * BalancePolicy.php
  * Copyright (c) 2024 james@firefly-iii.org.
@@ -38,8 +39,6 @@ class BalancePolicy
 
     /**
      * Everybody can do this, but selection should limit to user.
-     *
-     * @return true
      */
     public function viewAny(): bool
     {

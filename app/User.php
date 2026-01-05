@@ -24,6 +24,10 @@ declare(strict_types=1);
 
 namespace FireflyIII;
 
+use FireflyIII\Support\Facades\Preferences;
+use Illuminate\Support\Facades\Log;
+use Deprecated;
+use Exception;
 use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Events\RequestedNewPassword;
 use FireflyIII\Exceptions\FireflyException;
@@ -50,10 +54,9 @@ use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\Models\UserRole;
 use FireflyIII\Models\Webhook;
-use FireflyIII\Notifications\Admin\TestNotification;
-use FireflyIII\Notifications\Admin\UserInvitation;
 use FireflyIII\Notifications\Admin\UserRegistration;
 use FireflyIII\Notifications\Admin\VersionCheckResult;
+use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -62,26 +65,18 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Str;
 use Laravel\Passport\HasApiTokens;
-use Laravel\Passport\Token;
+use NotificationChannels\Pushover\PushoverReceiver;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperUser
- */
 class User extends Authenticatable
 {
     use HasApiTokens;
     use Notifiable;
-
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'blocked'    => 'boolean',
-        ];
-    protected $fillable = ['email', 'password', 'blocked', 'blocked_code'];
+    use ReturnsIntegerIdTrait;
+    protected $fillable = ['email', 'password', 'blocked', 'blocked_code', 'user_group_id'];
     protected $hidden   = ['password', 'remember_token'];
     protected $table    = 'users';
 
@@ -91,7 +86,7 @@ class User extends Authenticatable
     public static function routeBinder(string $value): self
     {
         if (auth()->check()) {
-            $userId = (int)$value;
+            $userId = (int) $value;
             $user   = self::find($userId);
             if (null !== $user) {
                 return $user;
@@ -168,7 +163,7 @@ class User extends Authenticatable
     /**
      * Generates access token.
      *
-     * @throws \Exception
+     * @throws Exception
      */
     public function generateAccessToken(): string
     {
@@ -184,7 +179,7 @@ class User extends Authenticatable
      */
     public function getAdministrationId(): int
     {
-        $groupId = (int)$this->user_group_id;
+        $groupId = (int) $this->user_group_id;
         if (0 === $groupId) {
             throw new FireflyException('User has no administration ID.');
         }
@@ -196,9 +191,8 @@ class User extends Authenticatable
      * Get the models LDAP domain.
      *
      * @return string
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function getLdapDomain()
     {
         return $this->{$this->getLdapDomainColumn()};
@@ -206,12 +200,9 @@ class User extends Authenticatable
 
     /**
      * Get the database column name of the domain.
-     *
-     * @return string
-     *
-     * @deprecated
      */
-    public function getLdapDomainColumn()
+    #[Deprecated]
+    public function getLdapDomainColumn(): string
     {
         return 'domain';
     }
@@ -220,9 +211,8 @@ class User extends Authenticatable
      * Get the models LDAP GUID.
      *
      * @return string
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function getLdapGuid()
     {
         return $this->{$this->getLdapGuidColumn()};
@@ -230,12 +220,9 @@ class User extends Authenticatable
 
     /**
      * Get the models LDAP GUID database column name.
-     *
-     * @return string
-     *
-     * @deprecated
      */
-    public function getLdapGuidColumn()
+    #[Deprecated]
+    public function getLdapGuidColumn(): string
     {
         return 'objectguid';
     }
@@ -258,22 +245,21 @@ class User extends Authenticatable
      */
     private function hasAnyRoleInGroup(UserGroup $userGroup, array $roles): bool
     {
-        app('log')->debug(sprintf('in hasAnyRoleInGroup(%s)', implode(', ', $roles)));
+        Log::debug(sprintf('in hasAnyRoleInGroup(%s)', implode(', ', $roles)));
 
         /** @var Collection $dbRoles */
         $dbRoles          = UserRole::whereIn('title', $roles)->get();
         if (0 === $dbRoles->count()) {
-            app('log')->error(sprintf('Could not find role(s): %s. Probably migration mishap.', implode(', ', $roles)));
+            Log::error(sprintf('Could not find role(s): %s. Probably migration mishap.', implode(', ', $roles)));
 
             return false;
         }
         $dbRolesIds       = $dbRoles->pluck('id')->toArray();
         $dbRolesTitles    = $dbRoles->pluck('title')->toArray();
 
-        /** @var Collection $groupMemberships */
         $groupMemberships = $this->groupMemberships()->whereIn('user_role_id', $dbRolesIds)->where('user_group_id', $userGroup->id)->get();
         if (0 === $groupMemberships->count()) {
-            app('log')->error(sprintf(
+            Log::error(sprintf(
                 'User #%d "%s" does not have roles %s in user group #%d "%s"',
                 $this->id,
                 $this->email,
@@ -285,7 +271,7 @@ class User extends Authenticatable
             return false;
         }
         foreach ($groupMemberships as $membership) {
-            app('log')->debug(sprintf(
+            Log::debug(sprintf(
                 'User #%d "%s" has role "%s" in user group #%d "%s"',
                 $this->id,
                 $this->email,
@@ -294,12 +280,12 @@ class User extends Authenticatable
                 $userGroup->title
             ));
             if (in_array($membership->userRole->title, $dbRolesTitles, true)) {
-                app('log')->debug(sprintf('Return true, found role "%s"', $membership->userRole->title));
+                Log::debug(sprintf('Return true, found role "%s"', $membership->userRole->title));
 
                 return true;
             }
         }
-        app('log')->error(sprintf(
+        Log::error(sprintf(
             'User #%d "%s" does not have roles %s in user group #%d "%s"',
             $this->id,
             $this->email,
@@ -372,7 +358,7 @@ class User extends Authenticatable
         }
         $email  = $this->email;
         // see if user has alternative email address:
-        $pref   = app('preferences')->getForUser($this, 'remote_guard_alt_email');
+        $pref   = Preferences::getForUser($this, 'remote_guard_alt_email');
         if (null !== $pref) {
             $email = $pref->data;
         }
@@ -382,9 +368,8 @@ class User extends Authenticatable
         }
 
         return match ($driver) {
-            'database' => $this->notifications(),
-            'mail'     => $email,
-            default    => null,
+            'mail'  => $email,
+            default => null,
         };
     }
 
@@ -404,35 +389,43 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class);
     }
 
+    public function routeNotificationForPushover(): PushoverReceiver
+    {
+        $appToken  = (string) Preferences::getEncrypted('pushover_app_token', '')->data;
+        $userToken = (string) Preferences::getEncrypted('pushover_user_token', '')->data;
+
+        return PushoverReceiver::withUserKey($userToken)->withApplicationToken($appToken);
+    }
+
     /**
      * Route notifications for the Slack channel.
      */
-    public function routeNotificationForSlack(Notification $notification): string
+    public function routeNotificationForSlack(Notification $notification): ?string
     {
         // this check does not validate if the user is owner, Should be done by notification itself.
-        $res  = app('fireflyconfig')->get('slack_webhook_url', '')->data;
+        $res  = app('fireflyconfig')->getEncrypted('slack_webhook_url', '')->data;
         if (is_array($res)) {
             $res = '';
         }
-        $res  = (string)$res;
-        if ($notification instanceof TestNotification) {
+        $res  = (string) $res;
+
+        if (property_exists($notification, 'type') && 'owner' === $notification->type) {
             return $res;
         }
-        if ($notification instanceof UserInvitation) {
-            return $res;
-        }
+
+        // not the best way to do this, but alas.
         if ($notification instanceof UserRegistration) {
             return $res;
         }
         if ($notification instanceof VersionCheckResult) {
             return $res;
         }
-        $pref = app('preferences')->getForUser($this, 'slack_webhook_url', '')->data;
+        $pref = Preferences::getEncryptedForUser($this, 'slack_webhook_url', '')->data;
         if (is_array($pref)) {
             return '';
         }
 
-        return (string)$pref;
+        return (string) $pref;
     }
 
     /**
@@ -460,7 +453,7 @@ class User extends Authenticatable
      */
     public function sendPasswordResetNotification($token): void
     {
-        $ipAddress = \Request::ip();
+        $ipAddress = Request::ip();
 
         event(new RequestedNewPassword($this, $token, $ipAddress));
     }
@@ -469,9 +462,8 @@ class User extends Authenticatable
      * Set the models LDAP domain.
      *
      * @param string $domain
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function setLdapDomain($domain): void
     {
         $this->{$this->getLdapDomainColumn()} = $domain;
@@ -481,9 +473,8 @@ class User extends Authenticatable
      * Set the models LDAP GUID.
      *
      * @param string $guid
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function setLdapGuid($guid): void
     {
         $this->{$this->getLdapGuidColumn()} = $guid;
@@ -532,5 +523,14 @@ class User extends Authenticatable
     public function webhooks(): HasMany
     {
         return $this->hasMany(Webhook::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'blocked'    => 'boolean',
+        ];
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * CurrencyController.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,11 +24,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
+use Illuminate\Http\Request;
+use Deprecated;
 use FireflyIII\Api\V1\Controllers\Controller;
+use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteApiRequest;
 use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
-use FireflyIII\User;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -36,6 +40,7 @@ use Illuminate\Http\JsonResponse;
 class CurrencyController extends Controller
 {
     private CurrencyRepositoryInterface $repository;
+    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
 
     /**
      * CurrencyController constructor.
@@ -44,11 +49,11 @@ class CurrencyController extends Controller
     {
         parent::__construct();
         $this->middleware(
-            function ($request, $next) {
-                /** @var User $user */
-                $user             = auth()->user();
+            function (Request $request, $next) {
+                $this->validateUserGroup($request);
                 $this->repository = app(CurrencyRepositoryInterface::class);
-                $this->repository->setUser($user);
+                $this->repository->setUser($this->user);
+                $this->repository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
@@ -59,16 +64,15 @@ class CurrencyController extends Controller
      * Documentation for this endpoint is at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getCurrenciesAC
      */
-    public function currencies(AutocompleteRequest $request): JsonResponse
+    public function currencies(AutocompleteApiRequest $request): JsonResponse
     {
-        $data       = $request->getData();
-        $collection = $this->repository->searchCurrency($data['query'], $this->parameters->get('limit'));
+        $collection = $this->repository->searchCurrency($request->attributes->get('query'), $request->attributes->get('limit'));
         $result     = [];
 
         /** @var TransactionCurrency $currency */
         foreach ($collection as $currency) {
             $result[] = [
-                'id'             => (string)$currency->id,
+                'id'             => (string) $currency->id,
                 'name'           => $currency->name,
                 'code'           => $currency->code,
                 'symbol'         => $currency->symbol,
@@ -76,15 +80,14 @@ class CurrencyController extends Controller
             ];
         }
 
-        return response()->json($result);
+        return response()->api($result);
     }
 
     /**
      * Documentation for this endpoint is at:
      * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getCurrenciesCodeAC
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function currenciesWithCode(AutocompleteRequest $request): JsonResponse
     {
         $data       = $request->getData();
@@ -94,7 +97,7 @@ class CurrencyController extends Controller
         /** @var TransactionCurrency $currency */
         foreach ($collection as $currency) {
             $result[] = [
-                'id'             => (string)$currency->id,
+                'id'             => (string) $currency->id,
                 'name'           => sprintf('%s (%s)', $currency->name, $currency->code),
                 'code'           => $currency->code,
                 'symbol'         => $currency->symbol,
@@ -102,6 +105,6 @@ class CurrencyController extends Controller
             ];
         }
 
-        return response()->json($result);
+        return response()->api($result);
     }
 }

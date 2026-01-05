@@ -26,10 +26,12 @@ namespace FireflyIII\Factory;
 
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Bill;
+use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Repositories\ObjectGroup\CreatesObjectGroups;
 use FireflyIII\Services\Internal\Support\BillServiceTrait;
 use FireflyIII\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class BillFactory
@@ -46,14 +48,17 @@ class BillFactory
      */
     public function create(array $data): ?Bill
     {
-        app('log')->debug(sprintf('Now in %s', __METHOD__), $data);
+        Log::debug(sprintf('Now in %s', __METHOD__), $data);
         $factory          = app(TransactionCurrencyFactory::class);
-        $currency         = $factory->find((int)($data['currency_id'] ?? null), (string)($data['currency_code'] ?? null)) ??
-                    app('amount')->getDefaultCurrencyByUserGroup($this->user->userGroup);
+        $currency         = $factory->find((int) ($data['currency_id'] ?? null), (string) ($data['currency_code'] ?? null))
+                    ?? app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
 
         try {
             $skip   = array_key_exists('skip', $data) ? $data['skip'] : 0;
             $active = array_key_exists('active', $data) ? $data['active'] : 0;
+
+            $data['extension_date'] ??= null;
+            $data['end_date']       ??= null;
 
             /** @var Bill $bill */
             $bill   = Bill::create(
@@ -66,8 +71,11 @@ class BillFactory
                     'transaction_currency_id' => $currency->id,
                     'amount_max'              => $data['amount_max'],
                     'date'                    => $data['date'],
+                    'date_tz'                 => $data['date']->format('e'),
                     'end_date'                => $data['end_date'] ?? null,
+                    'end_date_tz'             => $data['end_date']?->format('e'),
                     'extension_date'          => $data['extension_date'] ?? null,
+                    'extension_date_tz'       => $data['extension_date']?->format('e'),
                     'repeat_freq'             => $data['repeat_freq'],
                     'skip'                    => $skip,
                     'automatch'               => true,
@@ -75,28 +83,28 @@ class BillFactory
                 ]
             );
         } catch (QueryException $e) {
-            app('log')->error($e->getMessage());
-            app('log')->error($e->getTraceAsString());
+            Log::error($e->getMessage());
+            Log::error($e->getTraceAsString());
 
             throw new FireflyException('400000: Could not store bill.', 0, $e);
         }
 
         if (array_key_exists('notes', $data)) {
-            $this->updateNote($bill, (string)$data['notes']);
+            $this->updateNote($bill, (string) $data['notes']);
         }
         $objectGroupTitle = $data['object_group_title'] ?? '';
         if ('' !== $objectGroupTitle) {
             $objectGroup = $this->findOrCreateObjectGroup($objectGroupTitle);
-            if (null !== $objectGroup) {
+            if ($objectGroup instanceof ObjectGroup) {
                 $bill->objectGroups()->sync([$objectGroup->id]);
                 $bill->save();
             }
         }
         // try also with ID:
-        $objectGroupId    = (int)($data['object_group_id'] ?? 0);
+        $objectGroupId    = (int) ($data['object_group_id'] ?? 0);
         if (0 !== $objectGroupId) {
             $objectGroup = $this->findObjectGroupById($objectGroupId);
-            if (null !== $objectGroup) {
+            if ($objectGroup instanceof ObjectGroup) {
                 $bill->objectGroups()->sync([$objectGroup->id]);
                 $bill->save();
             }
@@ -107,8 +115,8 @@ class BillFactory
 
     public function find(?int $billId, ?string $billName): ?Bill
     {
-        $billId   = (int)$billId;
-        $billName = (string)$billName;
+        $billId   = (int) $billId;
+        $billName = (string) $billName;
         $bill     = null;
         // first find by ID:
         if ($billId > 0) {
@@ -118,7 +126,7 @@ class BillFactory
 
         // then find by name:
         if (null === $bill && '' !== $billName) {
-            $bill = $this->findByName($billName);
+            return $this->findByName($billName);
         }
 
         return $bill;
@@ -126,7 +134,8 @@ class BillFactory
 
     public function findByName(string $name): ?Bill
     {
-        return $this->user->bills()->where('name', 'LIKE', sprintf('%%%s%%', $name))->first();
+        /** @var null|Bill */
+        return $this->user->bills()->whereLike('name', sprintf('%%%s%%', $name))->first();
     }
 
     public function setUser(User $user): void

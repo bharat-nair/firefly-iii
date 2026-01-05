@@ -6,7 +6,7 @@
 
 {% block content %}
 
-    <form method="POST" action="{{ route('bills.store') }}" accept-charset="UTF-8" class="form-horizontal" id="store" enctype="multipart/form-data">
+    <form method="POST" action="{{ route('subscriptions.store') }}" accept-charset="UTF-8" class="form-horizontal" id="store" enctype="multipart/form-data">
         <input name="_token" type="hidden" value="{{ csrf_token() }}">
 
         <div class="row">
@@ -17,12 +17,12 @@
                     </div>
                     <div class="box-body">
                         {{ ExpandedForm.text('name') }}
-                        {{ CurrencyForm.currencyList('transaction_currency_id', defaultCurrency.id) }}
+                        {{ CurrencyForm.currencyList('transaction_currency_id', primaryCurrency.id) }}
                         {{ ExpandedForm.amountNoCurrency('amount_min') }}
                         {{ ExpandedForm.amountNoCurrency('amount_max') }}
                         {{ ExpandedForm.date('date',phpdate('Y-m-d')) }}
                         {{ ExpandedForm.select('repeat_freq',periods,'monthly') }}
-                        {{ ExpandedForm.integer('skip',0) }}
+                        {{ ExpandedForm.integer('skip',0, {'helpText': trans('firefly.skip_help_text')}) }}
                     </div>
                 </div>
 
@@ -68,17 +68,17 @@
 {% endblock %}
 
 {% block styles %}
-    <link href="v1/css/bootstrap-tagsinput.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet" media="all" nonce="{{ JS_NONCE }}">
-    <link href="v1/css/jquery-ui/jquery-ui.structure.min.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet" media="all" nonce="{{ JS_NONCE }}">
-    <link href="v1/css/jquery-ui/jquery-ui.theme.min.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet" media="all" nonce="{{ JS_NONCE }}">
+    <link href="v1/css/bootstrap-tagsinput.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet" media="all" nonce="{{ JS_NONCE }}">
+    <link href="v1/css/jquery-ui/jquery-ui.structure.min.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet" media="all" nonce="{{ JS_NONCE }}">
+    <link href="v1/css/jquery-ui/jquery-ui.theme.min.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet" media="all" nonce="{{ JS_NONCE }}">
 {% endblock %}
 {% block scripts %}
-    <script type="text/javascript" src="v1/js/lib/bootstrap-tagsinput.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/lib/modernizr-custom.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/lib/jquery-ui.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/ff/bills/create.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/lib/bootstrap-tagsinput.min.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/lib/modernizr-custom.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/lib/jquery-ui.min.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/ff/bills/create.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
 
     {# auto complete for object groups #}
-    <script type="text/javascript" src="v1/js/lib/typeahead/typeahead.bundle.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/ff/object-groups/create-edit.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/lib/typeahead/typeahead.bundle.min.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/ff/object-groups/create-edit.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
 {% endblock %}

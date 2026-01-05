@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AutocompleteRequest.php
  * Copyright (c) 2020 james@firefly-iii.org
@@ -23,13 +24,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Autocomplete;
 
-use FireflyIII\Models\AccountType;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Class AutocompleteRequest
+ *
+ * @deprecated
  */
 class AutocompleteRequest extends FormRequest
 {
@@ -45,18 +48,21 @@ class AutocompleteRequest extends FormRequest
         }
 
         // remove 'initial balance' from allowed types. its internal
-        $array = array_diff($array, [AccountType::INITIAL_BALANCE, AccountType::RECONCILIATION]);
+        $array = array_diff($array, [AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::RECONCILIATION->value]);
+
+        $date  = $this->getCarbonDate('date') ?? today(config('app.timezone'));
 
         return [
             'types' => $array,
             'query' => $this->convertString('query'),
-            'date'  => $this->getCarbonDate('date'),
+            'date'  => $date->endOfDay(),
         ];
     }
 
     public function rules(): array
     {
         return [
+            'date' => 'date|after:1970-01-02|before:2038-01-17',
         ];
     }
 }

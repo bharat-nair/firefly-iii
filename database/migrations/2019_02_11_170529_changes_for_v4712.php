@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 2019_02_11_170529_changes_for_v4712.php
  * Copyright (c) 2019 james@firefly-iii.org.
@@ -41,7 +42,7 @@ class ChangesForV4712 extends Migration
     /**
      * Run the migrations.
      *
-     * @SuppressWarnings(PHPMD.ShortMethodName)
+     * @SuppressWarnings("PHPMD.ShortMethodName")
      */
     public function up(): void
     {

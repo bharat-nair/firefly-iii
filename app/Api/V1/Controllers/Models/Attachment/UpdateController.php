@@ -1,4 +1,5 @@
 <?php
+
 /*
  * UpdateController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -80,7 +81,6 @@ class UpdateController extends Controller
 
         /** @var AttachmentTransformer $transformer */
         $transformer = app(AttachmentTransformer::class);
-        $transformer->setParameters($this->parameters);
 
         $resource    = new Item($attachment, $transformer, 'attachments');
 

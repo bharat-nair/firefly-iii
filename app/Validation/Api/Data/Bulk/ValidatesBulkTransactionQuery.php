@@ -24,37 +24,42 @@ declare(strict_types=1);
 
 namespace FireflyIII\Validation\Api\Data\Bulk;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use Illuminate\Validation\Validator;
+
+use function Safe\json_decode;
 
 trait ValidatesBulkTransactionQuery
 {
     protected function validateTransactionQuery(Validator $validator): void
     {
-        $data = $validator->getData();
+        $data  = $validator->getData();
         // assumption is all validation has already taken place and the query key exists.
-        $json = json_decode($data['query'], true, 8, JSON_THROW_ON_ERROR);
+        $query = $data['query'] ?? '[]';
+        $json  = json_decode($query, true, 8, JSON_THROW_ON_ERROR);
 
-        if (array_key_exists('account_id', $json['where'])
-            && array_key_exists('account_id', $json['update'])
+        if (
+            array_key_exists('where', $json)
+            && array_key_exists('update', $json)
+            && array_key_exists('account_id', $json['where']) && array_key_exists('account_id', $json['update'])
         ) {
             // find both accounts, must be same type.
             // already validated: belongs to this user.
             $repository     = app(AccountRepositoryInterface::class);
-            $source         = $repository->find((int)$json['where']['account_id']);
-            $dest           = $repository->find((int)$json['update']['account_id']);
+            $source         = $repository->find((int) $json['where']['account_id']);
+            $dest           = $repository->find((int) $json['update']['account_id']);
             if (null === $source) {
-                $validator->errors()->add('query', sprintf((string)trans('validation.invalid_query_data'), 'where', 'account_id'));
+                $validator->errors()->add('query', sprintf((string) trans('validation.invalid_query_data'), 'where', 'account_id'));
 
                 return;
             }
             if (null === $dest) {
-                $validator->errors()->add('query', sprintf((string)trans('validation.invalid_query_data'), 'update', 'account_id'));
+                $validator->errors()->add('query', sprintf((string) trans('validation.invalid_query_data'), 'update', 'account_id'));
 
                 return;
             }
             if ($source->accountType->type !== $dest->accountType->type) {
-                $validator->errors()->add('query', (string)trans('validation.invalid_query_account_type'));
+                $validator->errors()->add('query', (string) trans('validation.invalid_query_account_type'));
 
                 return;
             }
@@ -68,7 +73,7 @@ trait ValidatesBulkTransactionQuery
                 && null !== $destCurrency
                 && $sourceCurrency->id !== $destCurrency->id
             ) {
-                $validator->errors()->add('query', (string)trans('validation.invalid_query_currency'));
+                $validator->errors()->add('query', (string) trans('validation.invalid_query_currency'));
             }
         }
     }

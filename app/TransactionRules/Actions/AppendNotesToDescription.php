@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\TransactionRules\Actions;
 
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Events\Model\Rule\RuleActionFailedOnArray;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\Note;
@@ -41,32 +42,27 @@ class AppendNotesToDescription implements ActionInterface
     use ConvertsDataTypes;
     use RefreshNotesTrait;
 
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
-        app('log')->debug('Now in AppendNotesToDescription');
+        Log::debug('Now in AppendNotesToDescription');
         $this->refreshNotes($journal);
 
         /** @var null|TransactionJournal $object */
         $object = TransactionJournal::where('user_id', $journal['user_id'])->find($journal['transaction_journal_id']);
         if (null === $object) {
-            app('log')->error(sprintf('No journal #%d belongs to user #%d.', $journal['transaction_journal_id'], $journal['user_id']));
+            Log::error(sprintf('No journal #%d belongs to user #%d.', $journal['transaction_journal_id'], $journal['user_id']));
             event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.journal_other_user')));
 
             return false;
         }
         $note   = $object->notes()->first();
         if (null === $note) {
-            app('log')->debug('Journal has no notes.');
+            Log::debug('Journal has no notes.');
             $note       = new Note();
             $note->noteable()->associate($object);
             $note->text = '';
@@ -74,9 +70,9 @@ class AppendNotesToDescription implements ActionInterface
         // only append if there is something to append
         if ('' !== $note->text) {
             $before              = $object->description;
-            $object->description = trim(sprintf('%s %s', $object->description, (string)$this->clearString($note->text)));
+            $object->description = trim(sprintf('%s %s', $object->description, (string) $this->clearString($note->text)));
             $object->save();
-            app('log')->debug(sprintf('Journal description is updated to "%s".', $object->description));
+            Log::debug(sprintf('Journal description is updated to "%s".', $object->description));
 
             event(new TriggeredAuditLog($this->action->rule, $object, 'update_description', $before, $object->description));
 
@@ -88,7 +84,7 @@ class AppendNotesToDescription implements ActionInterface
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function get(string $key, mixed $default = null): mixed
     {
@@ -96,7 +92,7 @@ class AppendNotesToDescription implements ActionInterface
     }
 
     /**
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function has(mixed $key): mixed
     {

@@ -23,9 +23,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use FireflyIII\Handlers\Observer\BudgetObserver;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,25 +37,14 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperBudget
- */
+#[ObservedBy([BudgetObserver::class])]
 class Budget extends Model
 {
     use ReturnsIntegerIdTrait;
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'active'     => 'boolean',
-            'encrypted'  => 'boolean',
-        ];
-
-    protected $fillable = ['user_id', 'name', 'active', 'order', 'user_group_id'];
+    protected $fillable = ['user_id', 'user_group_id', 'name', 'active', 'order', 'user_group_id'];
 
     protected $hidden   = ['encrypted'];
 
@@ -118,10 +109,28 @@ class Budget extends Model
         return $this->belongsToMany(Transaction::class, 'budget_transaction', 'budget_id');
     }
 
+    protected function casts(): array
+    {
+        return [
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'deleted_at'    => 'datetime',
+            'active'        => 'boolean',
+            'encrypted'     => 'boolean',
+            'user_id'       => 'integer',
+            'user_group_id' => 'integer',
+        ];
+    }
+
     protected function order(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (int)$value,
+            get: static fn ($value): int => (int)$value,
         );
+    }
+
+    public function primaryPeriodStatistics(): MorphMany
+    {
+        return $this->morphMany(PeriodStatistic::class, 'primary_statable');
     }
 }

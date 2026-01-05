@@ -21,7 +21,7 @@
                         {{ preFilled.first_date.format('Y-m-d') }}
                         {{ ExpandedForm.date('first_date',null, {helpText: trans('firefly.help_first_date'), min: preFilled.first_date}) }}
                         {{ ExpandedForm.select('repetition_type', [], null, {helpText: trans('firefly.change_date_other_options')}) }}
-                        {{ ExpandedForm.integer('skip',0) }}
+                        {{ ExpandedForm.integer('skip',0, {'helpText': trans('firefly.skip_help_text')}) }}
                         {{ ExpandedForm.select('weekend', weekendResponses, null, {helpText: trans('firefly.help_weekend')}) }}
                         {{ ExpandedForm.select('repetition_end', repetitionEnds) }}
                         {{ ExpandedForm.date('repeat_until',null) }}
@@ -91,7 +91,7 @@
 
                         {{ ExpandedForm.text('transaction_description') }}
                         {# transaction information (mandatory) #}
-                        {{ CurrencyForm.currencyList('transaction_currency_id', defaultCurrency.id) }}
+                        {{ CurrencyForm.currencyList('transaction_currency_id', primaryCurrency.id) }}
                         {{ ExpandedForm.amountNoCurrency('amount') }}
 
                         {# source account if withdrawal, or if transfer: #}
@@ -137,7 +137,7 @@
                         {% if bills|length > 1 %}
                             {{ ExpandedForm.select('bill_id', bills, null) }}
                         {% else %}
-                            {{ ExpandedForm.select('bill_id', bills, null, {helpText: trans('firefly.no_bill_pointer', {link: route('bills.index')})}) }}
+                            {{ ExpandedForm.select('bill_id', bills, null, {helpText: trans('firefly.no_bill_pointer', {link: route('subscriptions.index')})}) }}
                         {% endif %}
 
                         {# TAGS #}
@@ -205,16 +205,16 @@
     </div>
 {% endblock %}
 {% block scripts %}
-    <script type="text/javascript" src="v1/js/lib/modernizr-custom.js?v={{ FF_VERSION }}"
+    <script type="text/javascript" src="v1/js/lib/modernizr-custom.js?v={{ FF_BUILD_TIME }}"
             nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/lib/typeahead/typeahead.bundle.min.js?v={{ FF_VERSION }}"
+    <script type="text/javascript" src="v1/js/lib/typeahead/typeahead.bundle.min.js?v={{ FF_BUILD_TIME }}"
             nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/ff/common/autocomplete.js?v={{ FF_VERSION }}"
+    <script type="text/javascript" src="v1/js/ff/common/autocomplete.js?v={{ FF_BUILD_TIME }}"
             nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/lib/bootstrap-tagsinput.min.js?v={{ FF_VERSION }}"
+    <script type="text/javascript" src="v1/js/lib/bootstrap-tagsinput.min.js?v={{ FF_BUILD_TIME }}"
             nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/js/lib/jquery-ui.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="v1/lib/fc/fullcalendar.min.js?v={{ FF_VERSION }}"
+    <script type="text/javascript" src="v1/js/lib/jquery-ui.min.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/lib/fc/fullcalendar.min.js?v={{ FF_BUILD_TIME }}"
             nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         var transactionType = "{{ preFilled.transaction_type }}";
@@ -222,17 +222,17 @@
         var eventsUrl = "{{ route('recurring.events') }}";
         var oldRepetitionType = "{{ oldRepetitionType }}";
     </script>
-    <script type="text/javascript" src="v1/js/ff/recurring/create.js?v={{ FF_VERSION }}"
+    <script type="text/javascript" src="v1/js/ff/recurring/create.js?v={{ FF_BUILD_TIME }}"
             nonce="{{ JS_NONCE }}"></script>
 {% endblock %}
 
 {% block styles %}
-    <link href="v1/css/bootstrap-tagsinput.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet" media="all"
+    <link href="v1/css/bootstrap-tagsinput.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet" media="all"
           nonce="{{ JS_NONCE }}">
-    <link href="v1/css/jquery-ui/jquery-ui.structure.min.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet"
+    <link href="v1/css/jquery-ui/jquery-ui.structure.min.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet"
           media="all" nonce="{{ JS_NONCE }}">
-    <link href="v1/css/jquery-ui/jquery-ui.theme.min.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet"
+    <link href="v1/css/jquery-ui/jquery-ui.theme.min.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet"
           media="all" nonce="{{ JS_NONCE }}">
-    <link href="v1/lib/fc/fullcalendar.min.css?v={{ FF_VERSION }}" type="text/css" rel="stylesheet" media="all"
+    <link href="v1/lib/fc/fullcalendar.min.css?v={{ FF_BUILD_TIME }}" type="text/css" rel="stylesheet" media="all"
           nonce="{{ JS_NONCE }}">
 {% endblock %}

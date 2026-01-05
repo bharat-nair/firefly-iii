@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AccountController.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -27,8 +28,12 @@ use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\Account\UpdateRequest;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Support\JsonApi\Enrichments\AccountEnrichment;
 use FireflyIII\Transformers\AccountTransformer;
+use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Resource\Item;
 
 /**
@@ -64,17 +69,24 @@ class UpdateController extends Controller
      */
     public function update(UpdateRequest $request, Account $account): JsonResponse
     {
-        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        Log::debug(sprintf('Now in %s', __METHOD__));
         $data         = $request->getUpdateData();
         $data['type'] = config('firefly.shortNamesByFullName.'.$account->accountType->type);
         $account      = $this->repository->update($account, $data);
         $manager      = $this->getManager();
         $account->refresh();
-        app('preferences')->mark();
+        Preferences::mark();
+
+        // enrich
+        /** @var User $admin */
+        $admin        = auth()->user();
+        $enrichment   = new AccountEnrichment();
+        $enrichment->setDate(null);
+        $enrichment->setUser($admin);
+        $account      = $enrichment->enrichSingle($account);
 
         /** @var AccountTransformer $transformer */
         $transformer  = app(AccountTransformer::class);
-        $transformer->setParameters($this->parameters);
         $resource     = new Item($account, $transformer, self::RESOURCE_KEY);
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);

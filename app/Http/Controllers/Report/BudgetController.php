@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
@@ -30,11 +31,13 @@ use FireflyIII\Models\Account;
 use FireflyIII\Models\Budget;
 use FireflyIII\Repositories\Budget\OperationsRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
+use FireflyIII\Support\Facades\Navigation;
 use FireflyIII\Support\Http\Controllers\BasicDataSupport;
 use FireflyIII\Support\Report\Budget\BudgetReportGenerator;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Class BudgetController.
@@ -67,7 +70,7 @@ class BudgetController extends Controller
      *
      * @throws FireflyException
      */
-    public function accountPerBudget(Collection $accounts, Collection $budgets, Carbon $start, Carbon $end)
+    public function accountPerBudget(Collection $accounts, Collection $budgets, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         /** @var BudgetReportGenerator $generator */
         $generator = app(BudgetReportGenerator::class);
@@ -81,13 +84,13 @@ class BudgetController extends Controller
         $generator->accountPerBudget();
         $report    = $generator->getReport();
 
-        return view('reports.budget.partials.account-per-budget', compact('report', 'budgets'));
+        return view('reports.budget.partials.account-per-budget', ['report' => $report, 'budgets' => $budgets]);
     }
 
     /**
      * @return Factory|View
      */
-    public function accounts(Collection $accounts, Collection $budgets, Carbon $start, Carbon $end)
+    public function accounts(Collection $accounts, Collection $budgets, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $spent  = $this->opsRepository->listExpenses($start, $end, $accounts, $budgets);
         $report = [];
@@ -126,14 +129,14 @@ class BudgetController extends Controller
                     ];
                     $report[$sourceAccountId]['currencies'][$currencyId]['sum'] = bcadd(
                         $report[$sourceAccountId]['currencies'][$currencyId]['sum'],
-                        $journal['amount']
+                        (string) $journal['amount']
                     );
-                    $sums[$currencyId]['sum']                                   = bcadd($sums[$currencyId]['sum'], $journal['amount']);
+                    $sums[$currencyId]['sum']                                   = bcadd($sums[$currencyId]['sum'], (string) $journal['amount']);
                 }
             }
         }
 
-        return view('reports.budget.partials.accounts', compact('sums', 'report'));
+        return view('reports.budget.partials.accounts', ['sums' => $sums, 'report' => $report]);
     }
 
     /**
@@ -163,9 +166,9 @@ class BudgetController extends Controller
                         'currency_decimal_places'  => $currency['currency_decimal_places'],
                     ];
                     ++$result[$key]['transactions'];
-                    $result[$key]['sum']       = bcadd($journal['amount'], $result[$key]['sum']);
-                    $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string)$result[$key]['transactions']);
-                    $result[$key]['avg_float'] = (float)$result[$key]['avg']; // intentional float
+                    $result[$key]['sum']       = bcadd((string) $journal['amount'], $result[$key]['sum']);
+                    $result[$key]['avg']       = bcdiv($result[$key]['sum'], (string) $result[$key]['transactions']);
+                    $result[$key]['avg_float'] = (float) $result[$key]['avg']; // intentional float
                 }
             }
         }
@@ -175,11 +178,11 @@ class BudgetController extends Controller
         array_multisort($amounts, SORT_ASC, $result);
 
         try {
-            $result = view('reports.budget.partials.avg-expenses', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.budget.partials.avg-expenses', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
-            app('log')->error($e->getTraceAsString());
+            Log::error($e->getTraceAsString());
 
             throw new FireflyException($result, 0, $e);
         }
@@ -190,7 +193,7 @@ class BudgetController extends Controller
     /**
      * @return Factory|View
      */
-    public function budgets(Collection $accounts, Collection $budgets, Carbon $start, Carbon $end)
+    public function budgets(Collection $accounts, Collection $budgets, Carbon $start, Carbon $end): Factory|\Illuminate\Contracts\View\View
     {
         $spent  = $this->opsRepository->listExpenses($start, $end, $accounts, $budgets);
         $sums   = [];
@@ -229,8 +232,8 @@ class BudgetController extends Controller
                         'currency_name'           => $currency['currency_name'],
                         'currency_decimal_places' => $currency['currency_decimal_places'],
                     ];
-                    $report[$budgetId]['currencies'][$currencyId]['sum'] = bcadd($report[$budgetId]['currencies'][$currencyId]['sum'], $journal['amount']);
-                    $sums[$currencyId]['sum']                            = bcadd($sums[$currencyId]['sum'], $journal['amount']);
+                    $report[$budgetId]['currencies'][$currencyId]['sum'] = bcadd($report[$budgetId]['currencies'][$currencyId]['sum'], (string) $journal['amount']);
+                    $sums[$currencyId]['sum']                            = bcadd($sums[$currencyId]['sum'], (string) $journal['amount']);
                 }
             }
         }
@@ -242,13 +245,13 @@ class BudgetController extends Controller
                 $total                                                   = $sums[$currencyId]['sum'] ?? '0';
                 $pct                                                     = '0';
                 if (0 !== bccomp($sum, '0') && 0 !== bccomp($total, '9')) {
-                    $pct = round((float)bcmul(bcdiv($sum, $total), '100')); // intentional float
+                    $pct = round((float) bcmul(bcdiv($sum, $total), '100')); // intentional float
                 }
                 $report[$budgetId]['currencies'][$currencyId]['sum_pct'] = $pct;
             }
         }
 
-        return view('reports.budget.partials.budgets', compact('sums', 'report'));
+        return view('reports.budget.partials.budgets', ['sums' => $sums, 'report' => $report]);
     }
 
     /**
@@ -271,7 +274,7 @@ class BudgetController extends Controller
         $generator->general();
         $report    = $generator->getReport();
 
-        return view('reports.partials.budgets', compact('report'))->render();
+        return view('reports.partials.budgets', ['report' => $report])->render();
     }
 
     /**
@@ -292,8 +295,9 @@ class BudgetController extends Controller
             return $cache->get();
         }
 
-        $periods   = app('navigation')->listOfPeriods($start, $end);
-        $keyFormat = app('navigation')->preferredCarbonFormat($start, $end);
+        $periods   = Navigation::listOfPeriods($start, $end);
+        $keyFormat = Navigation::preferredCarbonFormat($start, $end);
+
         // list expenses for budgets in account(s)
         $expenses  = $this->opsRepository->listExpenses($start, $end, $accounts);
 
@@ -302,6 +306,17 @@ class BudgetController extends Controller
             foreach ($currency['budgets'] as $budget) {
                 $count = 0;
                 foreach ($budget['transaction_journals'] as $journal) {
+                    // #10678
+                    // skip transactions between two asset / liability accounts.
+                    if (
+                        in_array($journal['source_account_type'], config('firefly.valid_currency_account_types'), true)
+                        && in_array($journal['destination_account_type'], config('firefly.valid_currency_account_types'), true)
+                    ) {
+                        continue;
+                    }
+
+
+
                     ++$count;
                     $key                               = sprintf('%d-%d', $budget['id'], $currency['currency_id']);
                     $dateKey                           = $journal['date']->format($keyFormat);
@@ -317,18 +332,18 @@ class BudgetController extends Controller
                         'entries'                 => [],
                     ];
                     $report[$key]['entries'][$dateKey] ??= '0';
-                    $report[$key]['entries'][$dateKey] = bcadd($journal['amount'], $report[$key]['entries'][$dateKey]);
-                    $report[$key]['sum']               = bcadd($report[$key]['sum'], $journal['amount']);
-                    $report[$key]['avg']               = bcdiv($report[$key]['sum'], (string)count($periods));
+                    $report[$key]['entries'][$dateKey] = bcadd((string) $journal['amount'], $report[$key]['entries'][$dateKey]);
+                    $report[$key]['sum']               = bcadd($report[$key]['sum'], (string) $journal['amount']);
+                    $report[$key]['avg']               = bcdiv($report[$key]['sum'], (string) count($periods));
                 }
             }
         }
 
         try {
-            $result = view('reports.partials.budget-period', compact('report', 'periods'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
-            app('log')->error($e->getTraceAsString());
+            $result = view('reports.partials.budget-period', ['report' => $report, 'periods' => $periods])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            Log::error($e->getTraceAsString());
             $result = 'Could not render view.';
 
             throw new FireflyException($result, 0, $e);
@@ -354,7 +369,7 @@ class BudgetController extends Controller
                     $result[] = [
                         'description'              => $journal['description'],
                         'transaction_group_id'     => $journal['transaction_group_id'],
-                        'amount_float'             => (float)$journal['amount'], // intentional float
+                        'amount_float'             => (float) $journal['amount'], // intentional float
                         'amount'                   => $journal['amount'],
                         'date'                     => $journal['date']->isoFormat($this->monthAndDayFormat),
                         'date_sort'                => $journal['date']->format('Y-m-d'),
@@ -376,9 +391,9 @@ class BudgetController extends Controller
         array_multisort($amounts, SORT_ASC, $result);
 
         try {
-            $result = view('reports.budget.partials.top-expenses', compact('result'))->render();
-        } catch (\Throwable $e) {
-            app('log')->error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
+            $result = view('reports.budget.partials.top-expenses', ['result' => $result])->render();
+        } catch (Throwable $e) {
+            Log::error(sprintf('Could not render reports.partials.budget-period: %s', $e->getMessage()));
             $result = sprintf('Could not render view: %s', $e->getMessage());
 
             throw new FireflyException($result, 0, $e);

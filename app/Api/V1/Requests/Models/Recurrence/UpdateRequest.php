@@ -1,4 +1,5 @@
 <?php
+
 /**
  * RecurrenceUpdateRequest.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Recurrence;
 
+use Illuminate\Contracts\Validation\Validator;
 use FireflyIII\Models\Recurrence;
 use FireflyIII\Rules\BelongsUser;
 use FireflyIII\Rules\IsBoolean;
@@ -35,7 +37,6 @@ use FireflyIII\Validation\RecurrenceValidation;
 use FireflyIII\Validation\TransactionValidation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class UpdateRequest
@@ -100,15 +101,15 @@ class UpdateRequest extends FormRequest
             }
 
             if (array_key_exists('moment', $repetition)) {
-                $current['moment'] = (string)$repetition['moment'];
+                $current['moment'] = (string) $repetition['moment'];
             }
 
             if (array_key_exists('skip', $repetition)) {
-                $current['skip'] = (int)$repetition['skip'];
+                $current['skip'] = (int) $repetition['skip'];
             }
 
             if (array_key_exists('weekend', $repetition)) {
-                $current['weekend'] = (int)$repetition['weekend'];
+                $current['weekend'] = (int) $repetition['weekend'];
             }
             $return[] = $current;
         }
@@ -121,7 +122,7 @@ class UpdateRequest extends FormRequest
 
     /**
      * Returns the transaction data as it is found in the submitted data. It's a complex method according to code
-     * standards but it just has a lot of ??-statements because of the fields that may or may not exist.
+     * standards, but it just has a lot of ??-statements because of the fields that may or may not exist.
      */
     private function getTransactionData(): array
     {
@@ -153,7 +154,7 @@ class UpdateRequest extends FormRequest
         return [
             'title'                                => sprintf('min:1|max:255|uniqueObjectForUser:recurrences,title,%d', $recurrence->id),
             'description'                          => 'min:1|max:32768',
-            'first_date'                           => 'date',
+            'first_date'                           => 'date|after:1970-01-02|before:2038-01-17',
             'apply_rules'                          => [new IsBoolean()],
             'active'                               => [new IsBoolean()],
             'repeat_until'                         => 'nullable|date',
@@ -207,7 +208,7 @@ class UpdateRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

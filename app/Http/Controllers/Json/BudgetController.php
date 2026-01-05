@@ -26,6 +26,7 @@ namespace FireflyIII\Http\Controllers\Json;
 
 use Carbon\Carbon;
 use FireflyIII\Http\Controllers\Controller;
+use FireflyIII\Models\AvailableBudget;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Budget\AvailableBudgetRepositoryInterface;
 use FireflyIII\Repositories\Budget\BudgetLimitRepositoryInterface;
@@ -53,7 +54,7 @@ class BudgetController extends Controller
 
         $this->middleware(
             function ($request, $next) {
-                app('view')->share('title', (string)trans('firefly.budgets'));
+                app('view')->share('title', (string) trans('firefly.budgets'));
                 app('view')->share('mainTitleIcon', 'fa-pie-chart');
                 $this->repository   = app(BudgetRepositoryInterface::class);
                 $this->abRepository = app(AvailableBudgetRepositoryInterface::class);
@@ -72,7 +73,7 @@ class BudgetController extends Controller
         $available       = '0';
         $percentage      = '0';
 
-        if (null !== $availableBudget) {
+        if ($availableBudget instanceof AvailableBudget) {
             $available = $availableBudget->amount;
             if (0 !== bccomp($available, '0')) {
                 $percentage = bcmul(bcdiv($budgeted, $available), '100');

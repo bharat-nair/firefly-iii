@@ -22,6 +22,17 @@
             </div>
             <div class="box-body">
                 <h4>{{ 'transaction_journal_meta'|_ }}</h4>
+                {% if array.nr_of_repetitions > 0 %}
+                <p>
+                    {% if array.journal_count >= array.nr_of_repetitions %}
+                        <span class="text-danger">{{ trans('firefly.recurrence_max_count', {count: array.journal_count, max: array.nr_of_repetitions}) }}</span>
+                    {% endif %}
+                    {% if array.journal_count < array.nr_of_repetitions %}
+                        {{ trans('firefly.recurrence_max_count', {count: array.journal_count, max: array.nr_of_repetitions}) }}
+                    {% endif %}
+                </p>
+                {% endif %}
+
                 <p>{{ 'description'|_ }}: <em>{{ array.description }}</em></p>
 
                 {% if array.active == false %}
@@ -173,7 +184,7 @@
                                 {% endif %}
                                 {% if 0 != transaction.bill_id %}
                                     <p>
-                                        <a href="{{ route('bills.show', [transaction.bill_id]) }}">{{ transaction.bill_name }}</a>
+                                        <a href="{{ route('subscriptions.show', [transaction.bill_id]) }}">{{ transaction.bill_name }}</a>
                                     </p>
                                 {% endif %}
                             </td>
@@ -202,13 +213,13 @@
     {% endblock %}
 
     {% block styles %}
-        <link rel="stylesheet" href="v1/css/bootstrap-sortable.css?v={{ FF_VERSION }}" type="text/css" media="all"
+        <link rel="stylesheet" href="v1/css/bootstrap-sortable.css?v={{ FF_BUILD_TIME }}" type="text/css" media="all"
               nonce="{{ JS_NONCE }}">
     {% endblock %}
 
     {% block scripts %}
-        <script type="text/javascript" src="v1/js/lib/bootstrap-sortable.js?v={{ FF_VERSION }}"
+        <script type="text/javascript" src="v1/js/lib/bootstrap-sortable.js?v={{ FF_BUILD_TIME }}"
                 nonce="{{ JS_NONCE }}"></script>
         {# required for groups.twig #}
-        <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
+        <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_BUILD_TIME }}" nonce="{{ JS_NONCE }}"></script>
     {% endblock %}

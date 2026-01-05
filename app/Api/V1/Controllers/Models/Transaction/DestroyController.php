@@ -1,4 +1,5 @@
 <?php
+
 /*
  * DestroyController.php
  * Copyright (c) 2021 james@firefly-iii.org
@@ -31,8 +32,10 @@ use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepository;
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class DestroyController
@@ -72,7 +75,7 @@ class DestroyController extends Controller
      */
     public function destroy(TransactionGroup $transactionGroup): JsonResponse
     {
-        app('log')->debug(sprintf('Now in %s', __METHOD__));
+        Log::debug(sprintf('Now in %s', __METHOD__));
         // grab asset account(s) from group:
         $accounts = [];
 
@@ -90,11 +93,11 @@ class DestroyController extends Controller
 
         $this->groupRepository->destroy($transactionGroup);
 
-        app('preferences')->mark();
+        Preferences::mark();
 
         /** @var Account $account */
         foreach ($accounts as $account) {
-            app('log')->debug(sprintf('Now going to trigger updated account event for account #%d', $account->id));
+            Log::debug(sprintf('Now going to trigger updated account event for account #%d', $account->id));
             event(new UpdatedAccount($account));
         }
 
@@ -110,7 +113,7 @@ class DestroyController extends Controller
     public function destroyJournal(TransactionJournal $transactionJournal): JsonResponse
     {
         $this->repository->destroyJournal($transactionJournal);
-        app('preferences')->mark();
+        Preferences::mark();
 
         return response()->json([], 204);
     }

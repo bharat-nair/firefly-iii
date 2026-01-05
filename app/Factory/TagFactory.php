@@ -1,4 +1,5 @@
 <?php
+
 /**
  * TagFactory.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -25,24 +26,27 @@ namespace FireflyIII\Factory;
 
 use FireflyIII\Models\Location;
 use FireflyIII\Models\Tag;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class TagFactory
  */
 class TagFactory
 {
-    private User $user;
+    private User      $user;
+    private UserGroup $userGroup;
 
     public function findOrCreate(string $tag): ?Tag
     {
         $tag    = trim($tag);
-        app('log')->debug(sprintf('Now in TagFactory::findOrCreate("%s")', $tag));
+        Log::debug(sprintf('Now in TagFactory::findOrCreate("%s")', $tag));
 
         /** @var null|Tag $dbTag */
         $dbTag  = $this->user->tags()->where('tag', $tag)->first();
         if (null !== $dbTag) {
-            app('log')->debug(sprintf('Tag exists (#%d), return it.', $dbTag->id));
+            Log::debug(sprintf('Tag exists (#%d), return it.', $dbTag->id));
 
             return $dbTag;
         }
@@ -56,36 +60,36 @@ class TagFactory
                 'zoom_level'  => null,
             ]
         );
-        if (null === $newTag) {
-            app('log')->error(sprintf('TagFactory::findOrCreate("%s") but tag is unexpectedly NULL!', $tag));
+        if (!$newTag instanceof Tag) {
+            Log::error(sprintf('TagFactory::findOrCreate("%s") but tag is unexpectedly NULL!', $tag));
 
             return null;
         }
-        app('log')->debug(sprintf('Created new tag #%d ("%s")', $newTag->id, $newTag->tag));
+        Log::debug(sprintf('Created new tag #%d ("%s")', $newTag->id, $newTag->tag));
 
         return $newTag;
     }
 
     public function create(array $data): ?Tag
     {
-        $zoomLevel = 0 === (int)$data['zoom_level'] ? null : (int)$data['zoom_level'];
-        $latitude  = 0.0 === (float)$data['latitude'] ? null : (float)$data['latitude'];   // intentional float
-        $longitude = 0.0 === (float)$data['longitude'] ? null : (float)$data['longitude']; // intentional float
+        $zoomLevel = 0 === (int) $data['zoom_level'] ? null : (int) $data['zoom_level'];
+        $latitude  = 0.0 === (float) $data['latitude'] ? null : (float) $data['latitude'];   // intentional float
+        $longitude = 0.0 === (float) $data['longitude'] ? null : (float) $data['longitude']; // intentional float
         $array     = [
-            'user_id'       => $this->user->id,
-            'user_group_id' => $this->user->user_group_id,
-            'tag'           => trim($data['tag']),
-            'tagMode'       => 'nothing',
-            'date'          => $data['date'],
-            'description'   => $data['description'],
-            'latitude'      => null,
-            'longitude'     => null,
-            'zoomLevel'     => null,
+            'user_id'        => $this->user->id,
+            'user_group_id'  => $this->userGroup->id,
+            'tag'            => trim((string) $data['tag']),
+            'tag_mode'       => 'nothing',
+            'date'           => $data['date'],
+            'description'    => $data['description'],
+            'latitude'       => null,
+            'longitude'      => null,
+            'zoomLevel'      => null,
         ];
 
         /** @var null|Tag $tag */
         $tag       = Tag::create($array);
-        if (null !== $tag && null !== $latitude && null !== $longitude) {
+        if (!in_array(null, [$tag, $latitude, $longitude], true)) {
             // create location object.
             $location             = new Location();
             $location->latitude   = $latitude;
@@ -100,6 +104,12 @@ class TagFactory
 
     public function setUser(User $user): void
     {
-        $this->user = $user;
+        $this->user      = $user;
+        $this->userGroup = $user->userGroup;
+    }
+
+    public function setUserGroup(UserGroup $userGroup): void
+    {
+        $this->userGroup = $userGroup;
     }
 }

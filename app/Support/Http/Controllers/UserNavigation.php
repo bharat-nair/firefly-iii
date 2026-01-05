@@ -1,4 +1,5 @@
 <?php
+
 /**
  * UserNavigation.php
  * Copyright (c) 2019 james@firefly-iii.org
@@ -23,12 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support\Http\Controllers;
 
+use Illuminate\Support\Facades\Log;
+use FireflyIII\Enums\AccountTypeEnum;
+use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Models\TransactionType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Redirector;
 
@@ -47,9 +49,9 @@ trait UserNavigation
      */
     final protected function getPreviousUrl(string $identifier): string
     {
-        app('log')->debug(sprintf('Trying to retrieve URL stored under "%s"', $identifier));
+        Log::debug(sprintf('Trying to retrieve URL stored under "%s"', $identifier));
         $url = (string)session($identifier);
-        app('log')->debug(sprintf('The URL is %s', $url));
+        Log::debug(sprintf('The URL is %s', $url));
 
         return app('steam')->getSafeUrl($url, route('index'));
     }
@@ -59,7 +61,7 @@ trait UserNavigation
      */
     final protected function isEditableAccount(Account $account): bool
     {
-        $editable = [AccountType::EXPENSE, AccountType::REVENUE, AccountType::ASSET, AccountType::LOAN, AccountType::DEBT, AccountType::MORTGAGE];
+        $editable = [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::REVENUE->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
         $type     = $account->accountType->type;
 
         return in_array($type, $editable, true);
@@ -73,24 +75,21 @@ trait UserNavigation
             return false;
         }
         $type     = $journal->transactionType->type;
-        $editable = [TransactionType::WITHDRAWAL, TransactionType::TRANSFER, TransactionType::DEPOSIT, TransactionType::RECONCILIATION];
+        $editable = [TransactionTypeEnum::WITHDRAWAL->value, TransactionTypeEnum::TRANSFER->value, TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::RECONCILIATION->value];
 
         return in_array($type, $editable, true);
     }
 
-    /**
-     * @return Redirector|RedirectResponse
-     */
-    final protected function redirectAccountToAccount(Account $account)
+    final protected function redirectAccountToAccount(Account $account): Redirector|RedirectResponse
     {
         $type = $account->accountType->type;
-        if (AccountType::RECONCILIATION === $type || AccountType::INITIAL_BALANCE === $type || AccountType::LIABILITY_CREDIT === $type) {
+        if (AccountTypeEnum::RECONCILIATION->value === $type || AccountTypeEnum::INITIAL_BALANCE->value === $type || AccountTypeEnum::LIABILITY_CREDIT->value === $type) {
             // reconciliation must be stored somewhere in this account's transactions.
 
             /** @var null|Transaction $transaction */
             $transaction = $account->transactions()->first();
             if (null === $transaction) {
-                app('log')->error(sprintf('Account #%d has no transactions. Dont know where it belongs.', $account->id));
+                Log::error(sprintf('Account #%d has no transactions. Dont know where it belongs.', $account->id));
                 session()->flash('error', trans('firefly.cant_find_redirect_account'));
 
                 return redirect(route('index'));
@@ -100,7 +99,7 @@ trait UserNavigation
             /** @var null|Transaction $other */
             $other       = $journal->transactions()->where('id', '!=', $transaction->id)->first();
             if (null === $other) {
-                app('log')->error(sprintf('Account #%d has no valid journals. Dont know where it belongs.', $account->id));
+                Log::error(sprintf('Account #%d has no valid journals. Dont know where it belongs.', $account->id));
                 session()->flash('error', trans('firefly.cant_find_redirect_account'));
 
                 return redirect(route('index'));
@@ -112,21 +111,18 @@ trait UserNavigation
         return redirect(route('index'));
     }
 
-    /**
-     * @return Redirector|RedirectResponse
-     */
-    final protected function redirectGroupToAccount(TransactionGroup $group)
+    final protected function redirectGroupToAccount(TransactionGroup $group): Redirector|RedirectResponse
     {
         /** @var null|TransactionJournal $journal */
         $journal      = $group->transactionJournals()->first();
         if (null === $journal) {
-            app('log')->error(sprintf('No journals in group #%d', $group->id));
+            Log::error(sprintf('No journals in group #%d', $group->id));
 
             return redirect(route('index'));
         }
         // prefer redirect to everything but expense and revenue:
         $transactions = $journal->transactions;
-        $ignore       = [AccountType::REVENUE, AccountType::EXPENSE, AccountType::RECONCILIATION, AccountType::INITIAL_BALANCE];
+        $ignore       = [AccountTypeEnum::REVENUE->value, AccountTypeEnum::EXPENSE->value, AccountTypeEnum::RECONCILIATION->value, AccountTypeEnum::INITIAL_BALANCE->value];
 
         /** @var Transaction $transaction */
         foreach ($transactions as $transaction) {
@@ -144,7 +140,7 @@ trait UserNavigation
         $return = app('steam')->getSafePreviousUrl();
         session()->put($identifier, $return);
 
-        app('log')->debug(sprintf('rememberPreviousUrl: %s: "%s"', $identifier, $return));
+        Log::debug(sprintf('rememberPreviousUrl: %s: "%s"', $identifier, $return));
 
         return $return;
     }

@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\ObjectGroup;
 
+use FireflyIII\Support\Facades\Preferences;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\ObjectGroupFormRequest;
 use FireflyIII\Models\ObjectGroup;
@@ -51,7 +52,7 @@ class EditController extends Controller
         $this->middleware(
             function ($request, $next) {
                 app('view')->share('mainTitleIcon', 'fa-envelope-o');
-                app('view')->share('title', (string)trans('firefly.object_groups_page_title'));
+                app('view')->share('title', (string) trans('firefly.object_groups_page_title'));
 
                 $this->repository = app(ObjectGroupRepositoryInterface::class);
 
@@ -62,12 +63,10 @@ class EditController extends Controller
 
     /**
      * Edit an object group.
-     *
-     * @return Factory|View
      */
-    public function edit(ObjectGroup $objectGroup)
+    public function edit(ObjectGroup $objectGroup): Factory|View
     {
-        $subTitle     = (string)trans('firefly.edit_object_group', ['title' => $objectGroup->title]);
+        $subTitle     = (string) trans('firefly.edit_object_group', ['title' => $objectGroup->title]);
         $subTitleIcon = 'fa-pencil';
 
         if (true !== session('object-groups.edit.fromUpdate')) {
@@ -75,7 +74,7 @@ class EditController extends Controller
         }
         session()->forget('object-groups.edit.fromUpdate');
 
-        return view('object-groups.edit', compact('subTitle', 'subTitleIcon', 'objectGroup'));
+        return view('object-groups.edit', ['subTitle' => $subTitle, 'subTitleIcon' => $subTitleIcon, 'objectGroup' => $objectGroup]);
     }
 
     /**
@@ -83,17 +82,17 @@ class EditController extends Controller
      *
      * @return Application|Redirector|RedirectResponse
      */
-    public function update(ObjectGroupFormRequest $request, ObjectGroup $objectGroup)
+    public function update(ObjectGroupFormRequest $request, ObjectGroup $objectGroup): Redirector|RedirectResponse
     {
         $data      = $request->getObjectGroupData();
         $piggyBank = $this->repository->update($objectGroup, $data);
 
-        session()->flash('success', (string)trans('firefly.updated_object_group', ['title' => $objectGroup->title]));
-        app('preferences')->mark();
+        session()->flash('success', (string) trans('firefly.updated_object_group', ['title' => $objectGroup->title]));
+        Preferences::mark();
 
         $redirect  = redirect($this->getPreviousUrl('object-groups.edit.url'));
 
-        if (1 === (int)$request->get('return_to_edit')) {
+        if (1 === (int) $request->get('return_to_edit')) {
             session()->put('object-groups.edit.fromUpdate', true);
 
             $redirect = redirect(route('object-groups.edit', [$piggyBank->id]));

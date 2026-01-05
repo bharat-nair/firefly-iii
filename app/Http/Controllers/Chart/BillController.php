@@ -72,7 +72,7 @@ class BillController extends Controller
          */
         foreach ($paid as $info) {
             $amount            = $info['sum'];
-            $label             = (string)trans('firefly.paid_in_currency', ['currency' => $info['name']]);
+            $label             = (string) trans('firefly.paid_in_currency', ['currency' => $info['name']]);
             $chartData[$label] = [
                 'amount'          => $amount,
                 'currency_symbol' => $info['symbol'],
@@ -85,7 +85,7 @@ class BillController extends Controller
          */
         foreach ($unpaid as $info) {
             $amount            = $info['sum'];
-            $label             = (string)trans('firefly.unpaid_in_currency', ['currency' => $info['name']]);
+            $label             = (string) trans('firefly.unpaid_in_currency', ['currency' => $info['name']]);
             $chartData[$label] = [
                 'amount'          => $amount,
                 'currency_symbol' => $info['symbol'],
@@ -109,6 +109,7 @@ class BillController extends Controller
         $cache      = new CacheProperties();
         $cache->addProperty('chart.bill.single');
         $cache->addProperty($bill->id);
+        $cache->addProperty($this->convertToPrimary);
         if ($cache->has()) {
             return response()->json($cache->get());
         }
@@ -121,7 +122,7 @@ class BillController extends Controller
         // sort the other way around:
         usort(
             $journals,
-            static function (array $left, array $right) {
+            static function (array $left, array $right): int {
                 if ($left['date']->gt($right['date'])) {
                     return 1;
                 }
@@ -132,43 +133,56 @@ class BillController extends Controller
                 return 0;
             }
         );
+        $currency   = $bill->transactionCurrency;
+        if ($this->convertToPrimary) {
+            $currency = $this->primaryCurrency;
+        }
 
         $chartData  = [
             [
                 'type'            => 'line',
-                'label'           => (string)trans('firefly.min-amount'),
-                'currency_symbol' => $bill->transactionCurrency->symbol,
-                'currency_code'   => $bill->transactionCurrency->code,
+                'label'           => (string) trans('firefly.min-amount'),
+                'currency_symbol' => $currency->symbol,
+                'currency_code'   => $currency->code,
                 'entries'         => [],
             ],
             [
                 'type'            => 'line',
-                'label'           => (string)trans('firefly.max-amount'),
-                'currency_symbol' => $bill->transactionCurrency->symbol,
-                'currency_code'   => $bill->transactionCurrency->code,
+                'label'           => (string) trans('firefly.max-amount'),
+                'currency_symbol' => $currency->symbol,
+                'currency_code'   => $currency->code,
                 'entries'         => [],
             ],
             [
                 'type'            => 'bar',
-                'label'           => (string)trans('firefly.journal-amount'),
-                'currency_symbol' => $bill->transactionCurrency->symbol,
-                'currency_code'   => $bill->transactionCurrency->code,
+                'label'           => (string) trans('firefly.journal-amount'),
+                'currency_symbol' => $currency->symbol,
+                'currency_code'   => $currency->code,
                 'entries'         => [],
             ],
         ];
         $currencyId = $bill->transaction_currency_id;
+        $amountMin  = $bill->amount_min;
+        $amountMax  = $bill->amount_max;
+        if ($this->convertToPrimary && $currencyId !== $this->primaryCurrency->id) {
+            $amountMin = $bill->native_amount_min;
+            $amountMax = $bill->native_amount_max;
+        }
         foreach ($journals as $journal) {
-            $date                           = $journal['date']->isoFormat((string)trans('config.month_and_day_js', [], $locale));
-            $chartData[0]['entries'][$date] = $bill->amount_min; // minimum amount of bill
-            $chartData[1]['entries'][$date] = $bill->amount_max; // maximum amount of bill
+            $date                           = $journal['date']->isoFormat((string) trans('config.month_and_day_js', [], $locale));
+            $chartData[0]['entries'][$date] = $amountMin; // minimum amount of bill
+            $chartData[1]['entries'][$date] = $amountMax; // maximum amount of bill
 
             // append amount because there are more than one per moment:
             if (!array_key_exists($date, $chartData[2]['entries'])) {
                 $chartData[2]['entries'][$date] = '0';
             }
-            $amount                         = bcmul($journal['amount'], '-1');
-            if ($currencyId === $journal['foreign_currency_id']) {
-                $amount = bcmul($journal['foreign_amount'], '-1');
+            $amount                         = bcmul((string) $journal['amount'], '-1');
+            if ($this->convertToPrimary && $currencyId !== $journal['currency_id']) {
+                $amount = bcmul($journal['pc_amount'] ?? '0', '-1');
+            }
+            if ($this->convertToPrimary && $currencyId === $journal['foreign_currency_id']) {
+                $amount = bcmul((string) $journal['pc_amount'], '-1');
             }
 
             $chartData[2]['entries'][$date] = bcadd($chartData[2]['entries'][$date], $amount);  // amount of journal

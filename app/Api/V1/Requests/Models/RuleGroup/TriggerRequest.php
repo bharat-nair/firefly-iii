@@ -52,7 +52,7 @@ class TriggerRequest extends FormRequest
         if (is_array($value)) {
             return null;
         }
-        $value = (string)$value;
+        $value = (string) $value;
 
         return null === $this->query($field) ? null : Carbon::createFromFormat('Y-m-d', substr($value, 0, 10));
     }
@@ -69,8 +69,8 @@ class TriggerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'start' => 'date',
-            'end'   => 'date|after_or_equal:start',
+            'start' => 'date|after:1970-01-02|before:2038-01-17',
+            'end'   => 'date|after_or_equal:start|after:1970-01-02|before:2038-01-17',
         ];
     }
 }

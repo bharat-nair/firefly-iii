@@ -33,9 +33,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * @mixin IdeHelperUserGroup
- */
 class UserGroup extends Model
 {
     use ReturnsIntegerIdTrait;
@@ -77,6 +74,14 @@ class UserGroup extends Model
     public function accounts(): HasMany
     {
         return $this->hasMany(Account::class);
+    }
+
+    /**
+     * Link to accounts.
+     */
+    public function periodStatistics(): HasMany
+    {
+        return $this->hasMany(PeriodStatistic::class);
     }
 
     /**
